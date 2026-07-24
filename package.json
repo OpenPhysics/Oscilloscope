@@ -47,11 +47,11 @@
     "scenerystack": "^3.0.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.4",
+    "@biomejs/biome": "^2.5.5",
     "@playwright/test": "^1.61.1",
     "@types/node": "^26.1.1",
     "playwright": "^1.61.1",
-    "happy-dom": "^20.11.0",
+    "happy-dom": "^20.11.1",
     "jsdom": "^29.1.1",
     "png-to-ico": "^3.0.2",
     "sharp": "^0.35.3",
