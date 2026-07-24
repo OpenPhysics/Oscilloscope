@@ -3,60 +3,134 @@
   "screens": {
     "sim": "Oscilloscope"
   },
-  "functionGenerator": {
+  "generator": {
     "title": "Générateur de fonctions",
     "waveform": "Forme d'onde",
-    "sine": "Sinusoïdale",
-    "square": "Carrée",
-    "triangle": "Triangulaire",
+    "sine": "Sinus",
+    "square": "Carré",
+    "triangle": "Triangle",
     "sawtooth": "Dent de scie",
-    "frequency": "Fréquence (Hz)",
-    "amplitude": "Amplitude (V)"
+    "pulse": "Impulsion",
+    "noise": "Bruit",
+    "frequency": "Fréquence",
+    "amplitude": "Amplitude",
+    "offset": "Décalage",
+    "duty": "Rapport",
+    "phase": "Phase CH2"
   },
   "source": {
-    "title": "Source du signal",
-    "functionGenerator": "Générateur de fonctions",
+    "title": "Entrée CH1",
+    "functionGenerator": "Générateur",
     "audio": "Microphone",
     "status": {
       "idle": "Microphone éteint",
-      "requesting": "Demande d'accès au microphone…",
-      "active": "Microphone en direct",
+      "requesting": "Demande du microphone…",
+      "active": "Microphone actif",
       "denied": "Accès au microphone refusé",
       "unsupported": "Microphone non disponible"
     }
   },
-  "display": {
-    "title": "Affichage",
-    "timePerDivision": "Temps / div",
-    "voltsPerDivision": "Volts / div"
+  "vertical": {
+    "title": "Vertical",
+    "voltsPerDivision": "Volts/Div",
+    "position": "Position",
+    "coupling": "Couplage",
+    "invert": "Inverser",
+    "channelOn": "Act.",
+    "dc": "CC",
+    "ac": "CA",
+    "gnd": "MASSE"
+  },
+  "horizontal": {
+    "title": "Horizontal",
+    "timePerDivision": "Temps/Div",
+    "position": "Position",
+    "magnify": "×10 Amp",
+    "xyMode": "X-Y"
+  },
+  "trigger": {
+    "title": "Déclenchement",
+    "source": "Source",
+    "level": "Niveau",
+    "slope": "Pente",
+    "mode": "Mode",
+    "ch1": "CH1",
+    "ch2": "CH2",
+    "rising": "Montante",
+    "falling": "Descendante",
+    "auto": "Auto",
+    "normal": "Normal",
+    "single": "Unique"
+  },
+  "acquisition": {
+    "title": "Acquérir",
+    "runStop": "Marche/Arrêt",
+    "single": "Unique",
+    "autoset": "Auto-réglage",
+    "persistence": "Persist.",
+    "math": "Math",
+    "mathOff": "Non",
+    "mathAdd": "CH1 + CH2",
+    "mathSubtract": "CH1 − CH2"
   },
   "measurements": {
-    "frequency": "Fréq {{value}}",
-    "period": "Période {{value}}",
-    "vpp": "Vpp {{value}}"
+    "title": "Mesurer",
+    "frequency": "Fréq",
+    "period": "Période",
+    "vpp": "Vpp",
+    "vrms": "Veff",
+    "vmax": "Vmax",
+    "vmin": "Vmin",
+    "none": "—"
   },
   "a11y": {
     "screenSummary": {
-      "playArea": "La zone de jeu est un écran d'oscilloscope doté d'une grille sur laquelle est tracée une courbe lumineuse.",
-      "controlArea": "La zone de contrôle permet de choisir la source du signal, de régler le générateur de fonctions, de définir les volts par division et le temps par division, de lancer ou d'arrêter la courbe et de réinitialiser la simulation.",
-      "interactionHint": "Modifiez la forme d'onde, la fréquence et l'amplitude, ou passez au microphone, et observez la réaction de la courbe."
+      "playArea": "La zone de jeu est un écran d'oscilloscope avec une graticule sur laquelle une ou deux traces lumineuses sont tracées, avec une ligne de niveau de déclenchement réglable.",
+      "controlArea": "La zone de commande comporte des boutons et interrupteurs de façade : un générateur de fonctions, des commandes verticales par voie, une base de temps horizontale, des commandes de déclenchement et des boutons d'acquisition marche/arrêt, unique et auto-réglage.",
+      "interactionHint": "Tournez les commandes du générateur, verticales, horizontales et de déclenchement et observez les traces, ou basculez CH1 sur le microphone."
     },
     "currentDetails": {
-      "functionGenerator": "L'oscilloscope affiche une onde {{waveform}} à {{frequency}} hertz avec une amplitude de {{amplitude}} volts.",
-      "audioActive": "L'oscilloscope affiche le signal du microphone en direct.",
+      "functionGenerator": "CH1 affiche une onde {{waveform}} à {{frequency}} hertz avec une amplitude de {{amplitude}} volts.",
+      "audioActive": "CH1 affiche le signal en direct du microphone.",
       "audioInactive": "La source microphone est sélectionnée mais aucun signal en direct n'est encore disponible."
     },
     "controls": {
-      "waveform": "Forme d'onde",
-      "frequency": "Fréquence du signal",
-      "amplitude": "Amplitude du signal",
-      "source": "Source du signal",
+      "source": "Source d'entrée de CH1",
+      "waveform": "Forme d'onde du générateur",
+      "frequency": "Fréquence du générateur",
+      "amplitude": "Amplitude du générateur",
+      "offset": "Décalage continu du générateur",
+      "duty": "Rapport cyclique du générateur",
+      "phase": "Phase de la voie 2",
+      "ch1VoltsPerDivision": "Volts par division de la voie 1",
+      "ch2VoltsPerDivision": "Volts par division de la voie 2",
+      "ch1Position": "Position verticale de la voie 1",
+      "ch2Position": "Position verticale de la voie 2",
+      "ch1Coupling": "Couplage de la voie 1",
+      "ch2Coupling": "Couplage de la voie 2",
+      "ch1Invert": "Inverser la voie 1",
+      "ch2Invert": "Inverser la voie 2",
+      "ch1Enabled": "Voie 1 activée ou désactivée",
+      "ch2Enabled": "Voie 2 activée ou désactivée",
       "timePerDivision": "Temps par division",
-      "voltsPerDivision": "Volts par division"
+      "horizontalPosition": "Position horizontale",
+      "magnify": "Amplificateur horizontal dix fois",
+      "xyMode": "Mode d'affichage X-Y",
+      "triggerSource": "Source de déclenchement",
+      "triggerLevel": "Niveau de déclenchement",
+      "triggerSlope": "Pente de déclenchement",
+      "triggerMode": "Mode de déclenchement",
+      "runStop": "Démarrer ou arrêter l'acquisition",
+      "single": "Capture à déclenchement unique",
+      "autoset": "Auto-régler l'affichage sur le signal",
+      "persistence": "Persistance de la forme d'onde",
+      "math": "Voie mathématique"
     }
   },
   "preferences": {
     "title": "Simulation",
-    "showMeasurements": "Afficher les mesures à l'écran"
+    "showMeasurements": "Afficher les mesures à l'écran",
+    "noise": "Injecter du bruit dans le signal",
+    "noiseAmplitude": "Amplitude du bruit (volts)"
   }
 }

@@ -123,16 +123,86 @@ const OscilloscopeColors = {
     projector: "#3fa564",
   }),
 
-  /** The glowing waveform trace (phosphor green). */
+  /** The glowing waveform trace (phosphor green) — used as a neutral default. */
   traceColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "trace", {
     default: "#4dff88",
     projector: "#4dff88",
+  }),
+
+  /** Channel 1 trace / label / LED color (classic scope amber-yellow). */
+  channel1ColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "channel1", {
+    default: "#ffd24d",
+    projector: "#ffd24d",
+  }),
+
+  /** Channel 2 trace / label / LED color (classic scope cyan). */
+  channel2ColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "channel2", {
+    default: "#4dd0ff",
+    projector: "#4dd0ff",
+  }),
+
+  /** Math (CH1±CH2) trace color. */
+  mathTraceColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "mathTrace", {
+    default: "#d18cff",
+    projector: "#d18cff",
+  }),
+
+  /** Trigger-level line drawn across the display. */
+  triggerColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "trigger", {
+    default: "#ff9a3d",
+    projector: "#ff9a3d",
+  }),
+
+  /** Measurement-cursor lines drawn across the display. */
+  cursorColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "cursor", {
+    default: "#e6e6e6",
+    projector: "#e6e6e6",
   }),
 
   /** On-screen measurement readout text overlaid on the display. */
   displayReadoutColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "displayReadout", {
     default: "#8effc0",
     projector: "#8effc0",
+  }),
+
+  // ── Front-panel hardware chrome (knobs, rotary switches, panel buttons) ───────
+  // Physical-instrument look: dark charcoal knobs with a bright indicator in the
+  // default (dark) theme; light gray knobs with a dark indicator in projector mode.
+
+  /** Fill of a rotary knob / switch body. */
+  knobBodyColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "knobBody", {
+    default: "#3a3f4b",
+    projector: "#d7dae0",
+  }),
+
+  /** Rim / bevel stroke around a knob body. */
+  knobRimColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "knobRim", {
+    default: "#6b7280",
+    projector: "#9aa0a8",
+  }),
+
+  /** The pointer / indicator line on a knob, and the detent ticks around it. */
+  knobIndicatorColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "knobIndicator", {
+    default: "#f5f7fa",
+    projector: "#22262e",
+  }),
+
+  /** Fill of a panel push button in its released (off) state. */
+  panelButtonColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "panelButton", {
+    default: "#2b303a",
+    projector: "#e2e4e9",
+  }),
+
+  /** Fill of a panel push button in its pressed (on) state. */
+  panelButtonPressedColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "panelButtonPressed", {
+    default: "#4a5163",
+    projector: "#b9bdc6",
+  }),
+
+  /** Dim color of an indicator LED that is currently off. */
+  ledOffColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "ledOff", {
+    default: "#333a44",
+    projector: "#b0b4bb",
   }),
 };
 

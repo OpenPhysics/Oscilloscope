@@ -3,19 +3,24 @@
   "screens": {
     "sim": "Oscilloscope"
   },
-  "functionGenerator": {
+  "generator": {
     "title": "Function Generator",
     "waveform": "Waveform",
     "sine": "Sine",
     "square": "Square",
     "triangle": "Triangle",
     "sawtooth": "Sawtooth",
-    "frequency": "Frequency (Hz)",
-    "amplitude": "Amplitude (V)"
+    "pulse": "Pulse",
+    "noise": "Noise",
+    "frequency": "Frequency",
+    "amplitude": "Amplitude",
+    "offset": "Offset",
+    "duty": "Duty",
+    "phase": "CH2 Phase"
   },
   "source": {
-    "title": "Signal Source",
-    "functionGenerator": "Function Generator",
+    "title": "CH1 Input",
+    "functionGenerator": "Generator",
     "audio": "Microphone",
     "status": {
       "idle": "Microphone off",
@@ -25,38 +30,107 @@
       "unsupported": "Microphone not available"
     }
   },
-  "display": {
-    "title": "Display",
-    "timePerDivision": "Time / div",
-    "voltsPerDivision": "Volts / div"
+  "vertical": {
+    "title": "Vertical",
+    "voltsPerDivision": "Volts/Div",
+    "position": "Position",
+    "coupling": "Coupling",
+    "invert": "Invert",
+    "channelOn": "On",
+    "dc": "DC",
+    "ac": "AC",
+    "gnd": "GND"
+  },
+  "horizontal": {
+    "title": "Horizontal",
+    "timePerDivision": "Time/Div",
+    "position": "Position",
+    "magnify": "×10 Mag",
+    "xyMode": "X-Y"
+  },
+  "trigger": {
+    "title": "Trigger",
+    "source": "Source",
+    "level": "Level",
+    "slope": "Slope",
+    "mode": "Mode",
+    "ch1": "CH1",
+    "ch2": "CH2",
+    "rising": "Rising",
+    "falling": "Falling",
+    "auto": "Auto",
+    "normal": "Normal",
+    "single": "Single"
+  },
+  "acquisition": {
+    "title": "Acquire",
+    "runStop": "Run/Stop",
+    "single": "Single",
+    "autoset": "Autoset",
+    "persistence": "Persist",
+    "math": "Math",
+    "mathOff": "Off",
+    "mathAdd": "CH1 + CH2",
+    "mathSubtract": "CH1 − CH2"
   },
   "measurements": {
-    "frequency": "Freq {{value}}",
-    "period": "Period {{value}}",
-    "vpp": "Vpp {{value}}"
+    "title": "Measure",
+    "frequency": "Freq",
+    "period": "Period",
+    "vpp": "Vpp",
+    "vrms": "Vrms",
+    "vmax": "Vmax",
+    "vmin": "Vmin",
+    "none": "—"
   },
   "a11y": {
     "screenSummary": {
-      "playArea": "The play area is an oscilloscope screen with a graticule grid on which a glowing waveform trace is drawn.",
-      "controlArea": "The control area lets you choose the signal source, adjust the function generator, set the volts-per-division and time-per-division, run or stop the trace, and reset the simulation.",
-      "interactionHint": "Change the waveform, frequency, and amplitude, or switch to the microphone, and watch the trace respond."
+      "playArea": "The play area is an oscilloscope screen with a graticule grid on which one or two glowing waveform traces are drawn, with an adjustable trigger-level line.",
+      "controlArea": "The control area has front-panel knobs and switches: a function generator, per-channel vertical controls, horizontal timebase, trigger controls, and acquisition buttons for run/stop, single, and autoset.",
+      "interactionHint": "Turn the generator, vertical, horizontal, and trigger controls and watch the traces respond, or switch CH1 to the microphone."
     },
     "currentDetails": {
-      "functionGenerator": "The oscilloscope is showing a {{waveform}} wave at {{frequency}} hertz with amplitude {{amplitude}} volts.",
-      "audioActive": "The oscilloscope is showing the live microphone signal.",
+      "functionGenerator": "CH1 shows a {{waveform}} wave at {{frequency}} hertz with amplitude {{amplitude}} volts.",
+      "audioActive": "CH1 shows the live microphone signal.",
       "audioInactive": "The microphone source is selected but no live signal is available yet."
     },
     "controls": {
-      "waveform": "Waveform",
-      "frequency": "Signal frequency",
-      "amplitude": "Signal amplitude",
-      "source": "Signal source",
+      "source": "CH1 input source",
+      "waveform": "Generator waveform",
+      "frequency": "Generator frequency",
+      "amplitude": "Generator amplitude",
+      "offset": "Generator DC offset",
+      "duty": "Generator duty cycle",
+      "phase": "Channel 2 phase",
+      "ch1VoltsPerDivision": "Channel 1 volts per division",
+      "ch2VoltsPerDivision": "Channel 2 volts per division",
+      "ch1Position": "Channel 1 vertical position",
+      "ch2Position": "Channel 2 vertical position",
+      "ch1Coupling": "Channel 1 coupling",
+      "ch2Coupling": "Channel 2 coupling",
+      "ch1Invert": "Invert channel 1",
+      "ch2Invert": "Invert channel 2",
+      "ch1Enabled": "Channel 1 on or off",
+      "ch2Enabled": "Channel 2 on or off",
       "timePerDivision": "Time per division",
-      "voltsPerDivision": "Volts per division"
+      "horizontalPosition": "Horizontal position",
+      "magnify": "Ten times horizontal magnifier",
+      "xyMode": "X-Y display mode",
+      "triggerSource": "Trigger source",
+      "triggerLevel": "Trigger level",
+      "triggerSlope": "Trigger slope",
+      "triggerMode": "Trigger mode",
+      "runStop": "Run or stop acquisition",
+      "single": "Single-shot capture",
+      "autoset": "Autoset the display to the signal",
+      "persistence": "Waveform persistence",
+      "math": "Math channel"
     }
   },
   "preferences": {
     "title": "Simulation",
-    "showMeasurements": "Show on-screen measurements"
+    "showMeasurements": "Show on-screen measurements",
+    "noise": "Inject signal noise",
+    "noiseAmplitude": "Noise amplitude (volts)"
   }
 }

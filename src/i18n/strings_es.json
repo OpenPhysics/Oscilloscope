@@ -3,60 +3,134 @@
   "screens": {
     "sim": "Osciloscopio"
   },
-  "functionGenerator": {
+  "generator": {
     "title": "Generador de funciones",
     "waveform": "Forma de onda",
     "sine": "Senoidal",
     "square": "Cuadrada",
     "triangle": "Triangular",
     "sawtooth": "Diente de sierra",
-    "frequency": "Frecuencia (Hz)",
-    "amplitude": "Amplitud (V)"
+    "pulse": "Pulso",
+    "noise": "Ruido",
+    "frequency": "Frecuencia",
+    "amplitude": "Amplitud",
+    "offset": "Desplaz.",
+    "duty": "Ciclo",
+    "phase": "Fase CH2"
   },
   "source": {
-    "title": "Fuente de señal",
-    "functionGenerator": "Generador de funciones",
+    "title": "Entrada CH1",
+    "functionGenerator": "Generador",
     "audio": "Micrófono",
     "status": {
       "idle": "Micrófono apagado",
       "requesting": "Solicitando micrófono…",
-      "active": "Micrófono en vivo",
+      "active": "Micrófono activo",
       "denied": "Acceso al micrófono denegado",
       "unsupported": "Micrófono no disponible"
     }
   },
-  "display": {
-    "title": "Pantalla",
-    "timePerDivision": "Tiempo / div",
-    "voltsPerDivision": "Voltios / div"
+  "vertical": {
+    "title": "Vertical",
+    "voltsPerDivision": "Voltios/Div",
+    "position": "Posición",
+    "coupling": "Acoplamiento",
+    "invert": "Invertir",
+    "channelOn": "Enc.",
+    "dc": "CC",
+    "ac": "CA",
+    "gnd": "TIERRA"
+  },
+  "horizontal": {
+    "title": "Horizontal",
+    "timePerDivision": "Tiempo/Div",
+    "position": "Posición",
+    "magnify": "×10 Amp",
+    "xyMode": "X-Y"
+  },
+  "trigger": {
+    "title": "Disparo",
+    "source": "Fuente",
+    "level": "Nivel",
+    "slope": "Pendiente",
+    "mode": "Modo",
+    "ch1": "CH1",
+    "ch2": "CH2",
+    "rising": "Subida",
+    "falling": "Bajada",
+    "auto": "Auto",
+    "normal": "Normal",
+    "single": "Único"
+  },
+  "acquisition": {
+    "title": "Adquirir",
+    "runStop": "Marcha/Paro",
+    "single": "Único",
+    "autoset": "Autoajuste",
+    "persistence": "Persist.",
+    "math": "Mate",
+    "mathOff": "No",
+    "mathAdd": "CH1 + CH2",
+    "mathSubtract": "CH1 − CH2"
   },
   "measurements": {
-    "frequency": "Frec {{value}}",
-    "period": "Período {{value}}",
-    "vpp": "Vpp {{value}}"
+    "title": "Medir",
+    "frequency": "Frec",
+    "period": "Periodo",
+    "vpp": "Vpp",
+    "vrms": "Vrms",
+    "vmax": "Vmáx",
+    "vmin": "Vmín",
+    "none": "—"
   },
   "a11y": {
     "screenSummary": {
-      "playArea": "El área de juego es una pantalla de osciloscopio con una cuadrícula sobre la que se dibuja una traza de forma de onda luminosa.",
-      "controlArea": "El área de control permite elegir la fuente de señal, ajustar el generador de funciones, fijar los voltios por división y el tiempo por división, iniciar o detener la traza y restablecer la simulación.",
-      "interactionHint": "Cambia la forma de onda, la frecuencia y la amplitud, o pasa al micrófono, y observa cómo responde la traza."
+      "playArea": "El área de juego es una pantalla de osciloscopio con una retícula sobre la que se dibujan una o dos trazas luminosas, con una línea de nivel de disparo ajustable.",
+      "controlArea": "El área de control tiene mandos e interruptores de panel: un generador de funciones, controles verticales por canal, base de tiempo horizontal, controles de disparo y botones de adquisición para marcha/paro, único y autoajuste.",
+      "interactionHint": "Gira los controles del generador, verticales, horizontales y de disparo y observa las trazas, o cambia CH1 al micrófono."
     },
     "currentDetails": {
-      "functionGenerator": "El osciloscopio muestra una onda {{waveform}} a {{frequency}} hercios con amplitud {{amplitude}} voltios.",
-      "audioActive": "El osciloscopio muestra la señal del micrófono en vivo.",
+      "functionGenerator": "CH1 muestra una onda {{waveform}} a {{frequency}} hercios con amplitud {{amplitude}} voltios.",
+      "audioActive": "CH1 muestra la señal en vivo del micrófono.",
       "audioInactive": "La fuente de micrófono está seleccionada pero aún no hay señal en vivo disponible."
     },
     "controls": {
-      "waveform": "Forma de onda",
-      "frequency": "Frecuencia de la señal",
-      "amplitude": "Amplitud de la señal",
-      "source": "Fuente de señal",
+      "source": "Fuente de entrada de CH1",
+      "waveform": "Forma de onda del generador",
+      "frequency": "Frecuencia del generador",
+      "amplitude": "Amplitud del generador",
+      "offset": "Desplazamiento de CC del generador",
+      "duty": "Ciclo de trabajo del generador",
+      "phase": "Fase del canal 2",
+      "ch1VoltsPerDivision": "Voltios por división del canal 1",
+      "ch2VoltsPerDivision": "Voltios por división del canal 2",
+      "ch1Position": "Posición vertical del canal 1",
+      "ch2Position": "Posición vertical del canal 2",
+      "ch1Coupling": "Acoplamiento del canal 1",
+      "ch2Coupling": "Acoplamiento del canal 2",
+      "ch1Invert": "Invertir el canal 1",
+      "ch2Invert": "Invertir el canal 2",
+      "ch1Enabled": "Canal 1 encendido o apagado",
+      "ch2Enabled": "Canal 2 encendido o apagado",
       "timePerDivision": "Tiempo por división",
-      "voltsPerDivision": "Voltios por división"
+      "horizontalPosition": "Posición horizontal",
+      "magnify": "Amplificador horizontal diez veces",
+      "xyMode": "Modo de pantalla X-Y",
+      "triggerSource": "Fuente de disparo",
+      "triggerLevel": "Nivel de disparo",
+      "triggerSlope": "Pendiente de disparo",
+      "triggerMode": "Modo de disparo",
+      "runStop": "Iniciar o detener la adquisición",
+      "single": "Captura de disparo único",
+      "autoset": "Autoajustar la pantalla a la señal",
+      "persistence": "Persistencia de la forma de onda",
+      "math": "Canal matemático"
     }
   },
   "preferences": {
     "title": "Simulación",
-    "showMeasurements": "Mostrar mediciones en pantalla"
+    "showMeasurements": "Mostrar mediciones en pantalla",
+    "noise": "Inyectar ruido en la señal",
+    "noiseAmplitude": "Amplitud del ruido (voltios)"
   }
 }

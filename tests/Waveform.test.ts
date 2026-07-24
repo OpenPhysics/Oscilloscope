@@ -19,12 +19,22 @@ describe("waveformSample", () => {
     }
   });
 
-  it("is periodic with period 1 in phase", () => {
+  it("is periodic with period 1 in phase (except aperiodic noise)", () => {
     for (const waveform of WAVEFORMS) {
+      if (waveform === "noise") {
+        continue;
+      }
       for (const p of [0.1, 0.37, 0.85]) {
         expect(waveformSample(waveform, p)).toBeCloseTo(waveformSample(waveform, p + 3));
       }
     }
+  });
+
+  it("pulse is a unipolar 0/1 train governed by duty", () => {
+    expect(waveformSample("pulse", 0.1, 0.5)).toBe(1);
+    expect(waveformSample("pulse", 0.6, 0.5)).toBe(0);
+    expect(waveformSample("pulse", 0.3, 0.25)).toBe(0);
+    expect(waveformSample("pulse", 0.1, 0.25)).toBe(1);
   });
 
   it("sine matches Math.sin", () => {

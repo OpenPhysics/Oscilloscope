@@ -39,7 +39,7 @@ function createAndDisposeTimeModel(): WeakRef<object> {
 function createAndDisposeOscilloscopeModel(): WeakRef<object> {
   const model = new OscilloscopeModel();
   // Exercise the sampling path so any retained per-frame state would show up.
-  model.getTrace();
+  model.refresh();
   const ref = new WeakRef<object>(model);
   model.dispose();
   return ref;

@@ -15,7 +15,7 @@ export class OscilloscopeScreenSummaryContent extends ScreenSummaryContent {
   public constructor(model: OscilloscopeModel) {
     const strings = StringManager.getInstance();
     const a11y = strings.getA11yStrings();
-    const fgStrings = strings.getFunctionGenerator();
+    const fgStrings = strings.getGenerator();
     const details = a11y.currentDetails;
     const fg = model.functionGenerator;
 
@@ -27,9 +27,11 @@ export class OscilloscopeScreenSummaryContent extends ScreenSummaryContent {
         fgStrings.squareStringProperty,
         fgStrings.triangleStringProperty,
         fgStrings.sawtoothStringProperty,
+        fgStrings.pulseStringProperty,
+        fgStrings.noiseStringProperty,
       ],
-      (waveform, sine, square, triangle, sawtooth) => {
-        const map = { sine, square, triangle, sawtooth };
+      (waveform, sine, square, triangle, sawtooth, pulse, noise) => {
+        const map = { sine, square, triangle, sawtooth, pulse, noise };
         return map[waveform];
       },
     );
