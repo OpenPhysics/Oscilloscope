@@ -4,21 +4,35 @@ Sim-specific context for AI assistants. General SceneryStack guidance: [OpenPhys
 
 ## Project
 
-A single-screen SceneryStack **oscilloscope** simulation. The scope displays either a synthetic
-signal from a built-in **function generator** (sine / square / triangle / sawtooth) or **live
-microphone audio** (Web Audio API), on a CRT-style graticule with 1-2-5 stepped volts/div and
-time/div controls, Run/Stop, and a live frequency / period / Vpp readout. Forked from
-`OpenPhysics/TemplateSingleSim`, and it keeps that template's **canonical accessibility** wiring.
-For multi-screen sims, see [`doc/multi-screen.md`](doc/multi-screen.md).
+A single-screen SceneryStack **oscilloscope** simulation modelled on a real bench scope. It has two
+vertical channels (**CH1 / CH2**), each with its own volts/div, position, AC-DC-GND coupling,
+invert, and on/off. CH1's input is a built-in **function generator** (sine / square / triangle /
+sawtooth / pulse / noise, with amplitude, DC offset, duty cycle, and a CH2 phase shift) or **live
+microphone audio** (Web Audio API). It has a horizontal timebase (time/div, position, ×10 magnify),
+a **trigger** system (source / level / slope / mode, with a draggable on-screen level line), Y-T,
+**X-Y**, and **FFT** (spectrum) display modes, a CH1±CH2 **math** trace, optional persistence,
+draggable **measurement cursors** (Δt / 1÷Δt / ΔV), **CSV / PNG export**, Run/Stop, Single, Autoset,
+and live auto-measurements (freq / period / Vpp / Vrms / Vmax / Vmin). Optional signal-noise injection
+is in Preferences.
+
+The defining UI decision: **every panel control is a real-instrument widget — rotary knobs, detented
+rotary switches, and panel buttons — never a slider.** Forked from `OpenPhysics/TemplateSingleSim`,
+it keeps that template's **canonical accessibility** wiring. For multi-screen sims, see
+[`doc/multi-screen.md`](doc/multi-screen.md).
 
 ### Simulation architecture
 
-- **Model** samples the active source into a voltage buffer (`OscilloscopeModel.getTrace()`), one
-  value per horizontal pixel column, over a time window of `timePerDiv × HORIZONTAL_DIVISIONS`.
-  The function generator is analytic (triggered → stationary); the microphone path pulls the
-  latest `AnalyserNode` time-domain data with a rising-edge trigger.
-- **View** redraws the trace each frame in `OscilloscopeScreenView.step()`, but **only while
-  running** — a stopped scope freezes the trace, like a real STOP.
+- **Model** resamples every channel into reusable volts-per-column buffers on `OscilloscopeModel.refresh()`,
+  over a time window of `effectiveTimePerDiv × HORIZONTAL_DIVISIONS`. The function generator is analytic
+  and trigger-aligned (`computeTriggerOffset()` finds the level/slope crossing → stationary display);
+  the microphone path pulls the latest `AnalyserNode` data with a level/slope trigger. Coupling (AC
+  mean-removal, GND flat line) is applied per channel.
+- **View** redraws the traces every frame in `OscilloscopeScreenView.step()`, but only **resamples**
+  while running — a stopped scope freezes the captured buffer, yet still rescales it live when you turn
+  volts/div or position, like a real STOP.
+- The **hardware controls** live in `src/common/controls/`: `RotaryKnob` and `RotarySwitch` are built on
+  sun's `AccessibleSlider` trait (keyboard/PDOM for free) but render as knobs/switches; `PanelButton`
+  wraps a `RectangularPushButton` with an indicator LED.
 - Run/Stop reuses `common/TimeModel`'s `isPlayingProperty` (no elapsed-time integration needed,
   since the trace is triggered rather than scrolled).
 
@@ -30,18 +44,32 @@ For multi-screen sims, see [`doc/multi-screen.md`](doc/multi-screen.md).
 | `src/SimConstants.ts` | Named numeric constants (display geometry, generator & scope ranges/steps) |
 | `src/OscilloscopeNamespace.ts` | Namespace for color property names |
 | `src/i18n/StringManager.ts` | Singleton localized string accessor |
-| `src/oscilloscope-screen/OscilloscopeScreen.ts` | Screen wrapper (threads the show-measurements preference to the view) |
-| `src/oscilloscope-screen/model/OscilloscopeModel.ts` | Top-level model: source selection, sensitivities, trace sampling |
-| `src/oscilloscope-screen/model/FunctionGenerator.ts` | Synthetic signal source (`voltageAt(t)`) |
+| `src/oscilloscope-screen/OscilloscopeScreen.ts` | Screen wrapper (threads show-measurements + noise preferences to view/model) |
+| `src/oscilloscope-screen/model/OscilloscopeModel.ts` | Top-level model: channels, source, timebase, trigger, math, per-frame `refresh()` |
+| `src/oscilloscope-screen/model/Channel.ts` | One vertical channel: volts/div, position, coupling, invert, on/off |
+| `src/oscilloscope-screen/model/Coupling.ts` | `DC` \| `AC` \| `GND` union |
+| `src/oscilloscope-screen/model/Trigger.ts` | Trigger source / level / slope / mode |
+| `src/oscilloscope-screen/model/FunctionGenerator.ts` | Synthetic source (`voltageAt(t)`, offset/duty/phase, injectable noise) |
 | `src/oscilloscope-screen/model/AudioInput.ts` | Microphone source via Web Audio `AnalyserNode` (degrades gracefully) |
-| `src/oscilloscope-screen/model/Waveform.ts` | Pure normalized waveform-shape evaluator |
+| `src/oscilloscope-screen/model/Waveform.ts` | Pure normalized waveform-shape evaluator (incl. pulse/noise) |
+| `src/oscilloscope-screen/model/Spectrum.ts` | Pure Hann-windowed radix-2 FFT for the spectrum (FFT) display mode |
 | `src/oscilloscope-screen/model/SignalSource.ts` | `functionGenerator` \| `audio` union |
-| `src/oscilloscope-screen/view/OscilloscopeScreenView.ts` | Layout, per-frame trace refresh, `screenSummaryContent` + `pdomOrder` |
-| `src/oscilloscope-screen/view/OscilloscopeDisplayNode.ts` | CRT face, graticule, and waveform trace |
-| `src/oscilloscope-screen/view/SignalControlPanel.ts` | Source selector + function-generator controls |
-| `src/oscilloscope-screen/view/ScopeControlPanel.ts` | Volts/div + time/div pickers |
-| `src/oscilloscope-screen/view/MeasurementReadoutNode.ts` | On-screen freq / period / Vpp overlay |
-| `src/oscilloscope-screen/view/formatUnits.ts` | Engineering-unit label formatters (mV/V, µs/ms, Hz/kHz) |
+| `src/common/controls/RotaryKnob.ts` | Continuous accessible knob (scrub drag + `AccessibleSlider` keyboard) |
+| `src/common/controls/RotarySwitch.ts` | Detented accessible selector (generic over value type) |
+| `src/common/controls/PanelButton.ts` | Front-panel push button with optional indicator LED |
+| `src/common/controls/KnobDragListener.ts` | Scrub-drag pointer behavior for `RotaryKnob` |
+| `src/oscilloscope-screen/view/OscilloscopeScreenView.ts` | Layout, per-frame refresh/redraw, measurements, Autoset, Single, `pdomOrder` |
+| `src/oscilloscope-screen/view/OscilloscopeDisplayNode.ts` | CRT face, graticule, CH1/CH2/math traces, trigger marker, X-Y, FFT, persistence, draggable cursors |
+| `src/oscilloscope-screen/view/CursorReadoutNode.ts` | On-screen Δt / 1÷Δt / ΔV cursor readout overlay |
+| `src/common/downloadFile.ts` | Browser CSV / PNG download helpers (used by trace export) |
+| `src/oscilloscope-screen/view/SignalGeneratorPanel.ts` | Source + waveform switches, freq/ampl/offset/duty/phase knobs |
+| `src/oscilloscope-screen/view/VerticalControlPanel.ts` | Per-channel volts/div, position, coupling, invert, on/off |
+| `src/oscilloscope-screen/view/HorizontalControlPanel.ts` | Time/div, position, ×10 magnify, X-Y |
+| `src/oscilloscope-screen/view/TriggerControlPanel.ts` | Trigger source / level / slope / mode |
+| `src/oscilloscope-screen/view/AcquisitionPanel.ts` | Run/Stop, Single, Autoset, Persist, Math |
+| `src/oscilloscope-screen/view/controlHelpers.ts` | Switch-item + readout-string factories for the panels |
+| `src/oscilloscope-screen/view/MeasurementReadoutNode.ts` | On-screen freq / period / Vpp / Vrms / Vmax / Vmin overlay |
+| `src/oscilloscope-screen/view/formatUnits.ts` | Engineering-unit label formatters (mV/V, µs/ms, Hz/kHz, %, °) |
 | `src/oscilloscope-screen/view/OscilloscopeScreenSummaryContent.ts` | Accessible screen summary with **live** current-details |
 | `src/oscilloscope-screen/view/OscilloscopeKeyboardHelpContent.ts` | Keyboard-help dialog content (slider + basic actions) |
 | `src/common/SimPanel.ts` | Pre-themed `Panel` wrapper (uses `OscilloscopeColors` automatically) |

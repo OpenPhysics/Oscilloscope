@@ -129,7 +129,12 @@ export class AudioInput {
    *
    * @returns true when live data was written, false when a flat line was written
    */
-  public fillTrace(out: Float32Array, windowSeconds: number): boolean {
+  public fillTrace(
+    out: Float32Array,
+    windowSeconds: number,
+    level = 0,
+    slope: "rising" | "falling" = "rising",
+  ): boolean {
     const analyser = this.analyser;
     if (!analyser) {
       out.fill(0);
@@ -140,14 +145,16 @@ export class AudioInput {
     const total = this.timeData.length;
     const windowSamples = Math.min(total, Math.max(2, Math.round(windowSeconds * this.sampleRate)));
 
-    // Trigger: start at the first rising zero-crossing in the leading part of the
-    // buffer so a periodic signal appears to stand still. Fall back to index 0.
+    // Trigger: start at the first crossing of `level` with the requested slope in
+    // the leading part of the buffer so a periodic signal appears to stand still.
+    // Fall back to index 0.
     let start = 0;
     const searchLimit = Math.min(total - windowSamples, Math.floor(total / 2));
     for (let i = 1; i < searchLimit; i++) {
       const prev = this.timeData[i - 1] ?? 0;
       const curr = this.timeData[i] ?? 0;
-      if (prev < 0 && curr >= 0) {
+      const crossed = slope === "rising" ? prev < level && curr >= level : prev > level && curr <= level;
+      if (crossed) {
         start = i;
         break;
       }

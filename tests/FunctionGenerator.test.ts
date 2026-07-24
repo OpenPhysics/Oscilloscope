@@ -7,12 +7,13 @@
 
 import { describe, expect, it } from "vitest";
 import { FunctionGenerator } from "../src/oscilloscope-screen/model/FunctionGenerator.js";
+import { FG_DEFAULT_FREQUENCY } from "../src/SimConstants.js";
 
 describe("FunctionGenerator", () => {
-  it("defaults to a sine wave at 440 Hz, amplitude 1 V", () => {
+  it("defaults to a sine wave at the default frequency, amplitude 1 V", () => {
     const fg = new FunctionGenerator();
     expect(fg.waveformProperty.value).toBe("sine");
-    expect(fg.frequencyProperty.value).toBe(440);
+    expect(fg.frequencyProperty.value).toBe(FG_DEFAULT_FREQUENCY);
     expect(fg.amplitudeProperty.value).toBe(1);
     fg.dispose();
   });
@@ -52,7 +53,7 @@ describe("FunctionGenerator", () => {
     fg.amplitudeProperty.value = 2;
     fg.reset();
     expect(fg.waveformProperty.value).toBe("sine");
-    expect(fg.frequencyProperty.value).toBe(440);
+    expect(fg.frequencyProperty.value).toBe(FG_DEFAULT_FREQUENCY);
     expect(fg.amplitudeProperty.value).toBe(1);
     fg.dispose();
   });

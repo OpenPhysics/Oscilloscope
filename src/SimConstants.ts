@@ -52,28 +52,59 @@ export const TRACE_SAMPLE_COUNT = DISPLAY_WIDTH;
 // ── Function generator defaults / ranges (SI units) ───────────────────────────
 
 /** Signal frequency in hertz. Audible-range default. */
-export const FG_DEFAULT_FREQUENCY = 440; // Hz (concert A)
-export const FG_FREQUENCY_RANGE = new Range(20, 2000); // Hz
+export const FG_DEFAULT_FREQUENCY = 200; // Hz
+export const FG_FREQUENCY_RANGE = new Range(1, 20000); // Hz
 
 /** Signal amplitude (zero-to-peak) in volts. */
 export const FG_DEFAULT_AMPLITUDE = 1.0; // V
-export const FG_AMPLITUDE_RANGE = new Range(0, 2.5); // V
+export const FG_AMPLITUDE_RANGE = new Range(0, 5); // V
+
+/** Vertical DC offset added to the generated signal, in volts. */
+export const FG_DEFAULT_OFFSET = 0; // V
+export const FG_OFFSET_RANGE = new Range(-5, 5); // V
+
+/** Duty cycle (high-fraction) for the square / pulse waveforms, unitless [0,1]. */
+export const FG_DEFAULT_DUTY_CYCLE = 0.5;
+export const FG_DUTY_CYCLE_RANGE = new Range(0.05, 0.95);
+
+/** Phase of CH2 relative to CH1, in degrees, for dual-channel phase comparisons. */
+export const FG_DEFAULT_PHASE = 0; // degrees
+export const FG_PHASE_RANGE = new Range(0, 360); // degrees
+
+/** Amplitude of the optional additive Gaussian-ish noise, in volts. */
+export const FG_DEFAULT_NOISE_AMPLITUDE = 0.15; // V
+export const FG_NOISE_AMPLITUDE_RANGE = new Range(0, 1); // V
 
 // ── Oscilloscope control defaults / ranges ────────────────────────────────────
 
 /** Vertical sensitivity: volts represented by one division. */
 export const SCOPE_DEFAULT_VOLTS_PER_DIV = 0.5; // V/div
-export const SCOPE_VOLTS_PER_DIV_RANGE = new Range(0.05, 2); // V/div
 
-/** Standard 1-2-5 volts-per-division steps offered in the picker. */
-export const SCOPE_VOLTS_PER_DIV_STEPS = [0.05, 0.1, 0.2, 0.5, 1, 2] as const; // V/div
+/** Full 1-2-5 volts-per-division rotary-switch positions (5 mV/div … 5 V/div). */
+export const SCOPE_VOLTS_PER_DIV_STEPS = [0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5] as const; // V/div
+export const SCOPE_VOLTS_PER_DIV_RANGE = new Range(0.005, 5); // V/div
 
 /** Horizontal sensitivity: seconds represented by one division. */
 export const SCOPE_DEFAULT_TIME_PER_DIV = 0.001; // s/div (1 ms/div)
-export const SCOPE_TIME_PER_DIV_RANGE = new Range(0.0001, 0.02); // s/div
 
-/** Standard 1-2-5 seconds-per-division steps offered in the picker. */
-export const SCOPE_TIME_PER_DIV_STEPS = [0.0001, 0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02] as const; // s/div
+/** Full 1-2-5 seconds-per-division rotary-switch positions (1 µs/div … 0.5 s/div). */
+export const SCOPE_TIME_PER_DIV_STEPS = [
+  0.000001, 0.000002, 0.000005, 0.00001, 0.00002, 0.00005, 0.0001, 0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02,
+  0.05, 0.1, 0.2, 0.5,
+] as const; // s/div
+export const SCOPE_TIME_PER_DIV_RANGE = new Range(0.000001, 0.5); // s/div
+
+/** Vertical trace position (offset), in divisions above/below center. */
+export const SCOPE_POSITION_RANGE = new Range(-VERTICAL_DIVISIONS / 2, VERTICAL_DIVISIONS / 2); // div
+
+/** Horizontal trace position (offset), in divisions left/right of center. */
+export const SCOPE_HORIZONTAL_POSITION_RANGE = new Range(-HORIZONTAL_DIVISIONS / 2, HORIZONTAL_DIVISIONS / 2); // div
+
+/** Trigger level, in volts. Kept wide so it stays reachable at any volts/div. */
+export const SCOPE_TRIGGER_LEVEL_RANGE = new Range(-20, 20); // V
+
+/** Extra sweep magnification applied when the ×10 (zoom) button is engaged. */
+export const SCOPE_MAGNIFY_FACTOR = 10;
 
 /** Size of the microphone analyser FFT window (power of two, per Web Audio spec). */
 export const AUDIO_FFT_SIZE = 2048;

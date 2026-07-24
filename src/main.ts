@@ -41,6 +41,9 @@ onReadyToLaunch(() => {
       backgroundColorProperty: OscilloscopeColors.backgroundColorProperty,
       // Shared preference: whether the on-screen measurement readout is drawn.
       showMeasurementsProperty: simPreferences.showMeasurementsProperty,
+      // Shared preferences: signal-noise injection, read live by the generator.
+      noiseEnabledProperty: simPreferences.noiseEnabledProperty,
+      noiseAmplitudeProperty: simPreferences.noiseAmplitudeProperty,
     }),
   ];
 

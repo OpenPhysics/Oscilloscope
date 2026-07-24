@@ -1,68 +1,78 @@
 /**
  * MeasurementReadoutNode.ts
  *
- * A small translucent readout overlaid on the top-left of the display, echoing
- * a real scope's automatic measurements: frequency, period, and peak-to-peak
- * voltage (Vpp). Frequency and period are known exactly for the function
- * generator; for the live microphone they read "—". Vpp is measured from the
- * displayed trace, so it is meaningful for both sources.
+ * A translucent automatic-measurements readout overlaid on the top-left of the
+ * display, echoing a real scope's MEASURE panel: frequency, period, and the
+ * peak-to-peak, RMS, max and min voltages of the primary channel. The view feeds
+ * it live numeric Properties (measured each frame); this node formats them.
  *
  * Visibility is bound to the Preferences → Simulation "Show on-screen
  * measurements" toggle.
  */
 
-import { DerivedProperty, PatternStringProperty, type TReadOnlyProperty } from "scenerystack/axon";
-import { Rectangle, Text, VBox } from "scenerystack/scenery";
+import { DerivedProperty, type TReadOnlyProperty } from "scenerystack/axon";
+import { GridBox, Rectangle, Text } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
 import { StringManager } from "../../i18n/StringManager.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
-import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
 import { formatFrequency, formatPeriod, formatVoltage } from "./formatUnits.js";
 
-const READOUT_FONT = new PhetFont(12);
-const NO_VALUE = "—";
+const READOUT_FONT = new PhetFont(11);
+
+export type MeasurementProperties = {
+  /** Signal frequency in Hz; 0 or negative renders as "—". */
+  readonly frequencyProperty: TReadOnlyProperty<number>;
+  /** Signal period in seconds; 0 or negative renders as "—". */
+  readonly periodProperty: TReadOnlyProperty<number>;
+  readonly vppProperty: TReadOnlyProperty<number>;
+  readonly vrmsProperty: TReadOnlyProperty<number>;
+  readonly vmaxProperty: TReadOnlyProperty<number>;
+  readonly vminProperty: TReadOnlyProperty<number>;
+};
 
 export class MeasurementReadoutNode extends Rectangle {
-  public constructor(
-    model: OscilloscopeModel,
-    measuredVppProperty: TReadOnlyProperty<number>,
-    showMeasurementsProperty: TReadOnlyProperty<boolean>,
-  ) {
-    const measurements = StringManager.getInstance().getMeasurements();
-    const fg = model.functionGenerator;
+  public constructor(measurements: MeasurementProperties, showMeasurementsProperty: TReadOnlyProperty<boolean>) {
+    const m = StringManager.getInstance().getMeasurements();
+    const none = m.noneStringProperty;
 
-    const frequencyValueProperty = new DerivedProperty([model.sourceProperty, fg.frequencyProperty], (source, hz) =>
-      source === "functionGenerator" ? formatFrequency(hz) : NO_VALUE,
+    const valueText = (property: TReadOnlyProperty<string>): Text =>
+      new Text(property, { font: READOUT_FONT, fill: OscilloscopeColors.displayReadoutColorProperty });
+
+    const labelText = (property: TReadOnlyProperty<string>): Text =>
+      new Text(property, { font: READOUT_FONT, fill: OscilloscopeColors.displayReadoutColorProperty });
+
+    const freqString = new DerivedProperty([measurements.frequencyProperty, none], (hz, dash) =>
+      hz > 0 ? formatFrequency(hz) : dash,
     );
-    const periodValueProperty = new DerivedProperty([model.sourceProperty, fg.frequencyProperty], (source, hz) =>
-      source === "functionGenerator" && hz > 0 ? formatPeriod(1 / hz) : NO_VALUE,
+    const periodString = new DerivedProperty([measurements.periodProperty, none], (s, dash) =>
+      s > 0 ? formatPeriod(s) : dash,
     );
-    const vppValueProperty = new DerivedProperty([measuredVppProperty], (vpp) => formatVoltage(vpp));
+    const vppString = new DerivedProperty([measurements.vppProperty], formatVoltage);
+    const vrmsString = new DerivedProperty([measurements.vrmsProperty], formatVoltage);
+    const vmaxString = new DerivedProperty([measurements.vmaxProperty], formatVoltage);
+    const vminString = new DerivedProperty([measurements.vminProperty], formatVoltage);
 
-    const line = (pattern: TReadOnlyProperty<string>, valueProperty: TReadOnlyProperty<string>) =>
-      new Text(new PatternStringProperty(pattern, { value: valueProperty }), {
-        font: READOUT_FONT,
-        fill: OscilloscopeColors.displayReadoutColorProperty,
-      });
-
-    const content = new VBox({
-      align: "left",
-      spacing: 3,
-      children: [
-        line(measurements.frequencyStringProperty, frequencyValueProperty),
-        line(measurements.periodStringProperty, periodValueProperty),
-        line(measurements.vppStringProperty, vppValueProperty),
+    const grid = new GridBox({
+      xSpacing: 10,
+      ySpacing: 2,
+      xAlign: "left",
+      rows: [
+        [labelText(m.frequencyStringProperty), valueText(freqString)],
+        [labelText(m.periodStringProperty), valueText(periodString)],
+        [labelText(m.vppStringProperty), valueText(vppString)],
+        [labelText(m.vrmsStringProperty), valueText(vrmsString)],
+        [labelText(m.vmaxStringProperty), valueText(vmaxString)],
+        [labelText(m.vminStringProperty), valueText(vminString)],
       ],
     });
 
-    // Semi-transparent card behind the text so it stays legible over the trace.
-    super(0, 0, content.width + 16, content.height + 12, {
+    super(0, 0, grid.width + 16, grid.height + 12, {
       fill: "rgba(0, 0, 0, 0.55)",
       cornerRadius: 4,
       visibleProperty: showMeasurementsProperty,
     });
-    content.centerY = this.rectHeight / 2;
-    content.left = 8;
-    this.addChild(content);
+    grid.left = 8;
+    grid.centerY = this.rectHeight / 2;
+    this.addChild(grid);
   }
 }

@@ -44,3 +44,13 @@ export function formatPeriod(seconds: number): string {
 export function formatVoltage(volts: number): string {
   return `${volts.toFixed(2)} V`;
 }
+
+/** e.g. 0.5 → "50%". */
+export function formatPercent(fraction: number): string {
+  return `${Math.round(fraction * 100)}%`;
+}
+
+/** e.g. 90 → "90°". */
+export function formatDegrees(degrees: number): string {
+  return `${Math.round(degrees)}°`;
+}

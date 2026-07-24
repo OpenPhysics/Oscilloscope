@@ -28,6 +28,24 @@ const oscilloscopeQueryParameters = QueryStringMachine.getAll({
     defaultValue: true,
     public: true,
   },
+
+  /**
+   * Whether additive signal noise is injected on startup. Also toggled at
+   * runtime in Preferences → Simulation, for signal-to-noise discussions.
+   */
+  noise: {
+    type: "boolean",
+    defaultValue: false,
+    public: true,
+  },
+
+  /** Startup amplitude of the injected noise, in volts. */
+  noiseAmplitude: {
+    type: "number",
+    defaultValue: 0.15,
+    isValidValue: (value: number) => value >= 0 && value <= 1,
+    public: true,
+  },
 });
 
 OscilloscopeNamespace.register("oscilloscopeQueryParameters", oscilloscopeQueryParameters);

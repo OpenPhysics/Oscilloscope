@@ -85,8 +85,8 @@ export class StringManager {
   }
 
   /** Function-generator control labels and waveform names. */
-  public getFunctionGenerator() {
-    return stringProperties.functionGenerator;
+  public getGenerator() {
+    return stringProperties.generator;
   }
 
   /** Signal-source selector labels and microphone status messages. */
@@ -94,12 +94,27 @@ export class StringManager {
     return stringProperties.source;
   }
 
-  /** Oscilloscope display-control labels (time/div, volts/div). */
-  public getDisplay() {
-    return stringProperties.display;
+  /** Per-channel vertical control labels (volts/div, position, coupling, …). */
+  public getVertical() {
+    return stringProperties.vertical;
   }
 
-  /** On-screen measurement-readout label patterns. */
+  /** Horizontal timebase control labels (time/div, position, ×10, X-Y). */
+  public getHorizontal() {
+    return stringProperties.horizontal;
+  }
+
+  /** Trigger control labels (source, level, slope, mode). */
+  public getTrigger() {
+    return stringProperties.trigger;
+  }
+
+  /** Acquisition / display control labels (run/stop, single, autoset, math, …). */
+  public getAcquisition() {
+    return stringProperties.acquisition;
+  }
+
+  /** On-screen measurement-readout labels. */
   public getMeasurements() {
     return stringProperties.measurements;
   }
