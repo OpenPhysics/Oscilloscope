@@ -51,6 +51,10 @@ export class OscilloscopeDisplayNode extends Node {
 
   private previousCh1Shape: Shape | null = null;
 
+  // Teardown for the model-Property links and drag listeners wired up below, so a
+  // disposed display node does not keep the (longer-lived) model alive.
+  private readonly disposeActions: (() => void)[] = [];
+
   public constructor(model: OscilloscopeModel, providedOptions?: NodeOptions) {
     super();
     this.model = model;
@@ -149,14 +153,17 @@ export class OscilloscopeDisplayNode extends Node {
       },
     );
     this.triggerMarker = new Node({ children: [this.triggerLine, triggerTab], cursor: "ns-resize" });
-    this.triggerMarker.addInputListener(
-      new DragListener({
-        drag: (event) => {
-          const localY = this.globalToLocalPoint(event.pointer.point).y;
-          this.setTriggerLevelFromY(localY);
-        },
-      }),
-    );
+    const triggerDragListener = new DragListener({
+      drag: (event) => {
+        const localY = this.globalToLocalPoint(event.pointer.point).y;
+        this.setTriggerLevelFromY(localY);
+      },
+    });
+    this.triggerMarker.addInputListener(triggerDragListener);
+    this.disposeActions.push(() => {
+      this.triggerMarker.removeInputListener(triggerDragListener);
+      triggerDragListener.dispose();
+    });
     this.addChild(this.triggerMarker);
 
     // ── Draggable measurement cursors (two time, two voltage) ─────────────────
@@ -182,16 +189,21 @@ export class OscilloscopeDisplayNode extends Node {
     });
     const hit = new Rectangle(-7, 0, 14, DISPLAY_HEIGHT, { fill: "rgba(0,0,0,0.01)" });
     const node = new Node({ children: [hit, line], cursor: "ew-resize" });
-    node.addInputListener(
-      new DragListener({
-        drag: (event) => {
-          const x = this.globalToLocalPoint(event.pointer.point).x;
-          property.value = clamp((x / DISPLAY_WIDTH) * HORIZONTAL_DIVISIONS, 0, HORIZONTAL_DIVISIONS);
-        },
-      }),
-    );
-    property.link((divisions) => {
+    const dragListener = new DragListener({
+      drag: (event) => {
+        const x = this.globalToLocalPoint(event.pointer.point).x;
+        property.value = clamp((x / DISPLAY_WIDTH) * HORIZONTAL_DIVISIONS, 0, HORIZONTAL_DIVISIONS);
+      },
+    });
+    node.addInputListener(dragListener);
+    const updatePosition = (divisions: number) => {
       node.x = (divisions / HORIZONTAL_DIVISIONS) * DISPLAY_WIDTH;
+    };
+    property.link(updatePosition);
+    this.disposeActions.push(() => {
+      property.unlink(updatePosition);
+      node.removeInputListener(dragListener);
+      dragListener.dispose();
     });
     return node;
   }
@@ -206,16 +218,21 @@ export class OscilloscopeDisplayNode extends Node {
     const hit = new Rectangle(0, -7, DISPLAY_WIDTH, 14, { fill: "rgba(0,0,0,0.01)" });
     const node = new Node({ children: [hit, line], cursor: "ns-resize" });
     const halfV = VERTICAL_DIVISIONS / 2;
-    node.addInputListener(
-      new DragListener({
-        drag: (event) => {
-          const y = this.globalToLocalPoint(event.pointer.point).y;
-          property.value = clamp((CENTER_Y - y) / DIVISION_SIZE, -halfV, halfV);
-        },
-      }),
-    );
-    property.link((divisions) => {
+    const dragListener = new DragListener({
+      drag: (event) => {
+        const y = this.globalToLocalPoint(event.pointer.point).y;
+        property.value = clamp((CENTER_Y - y) / DIVISION_SIZE, -halfV, halfV);
+      },
+    });
+    node.addInputListener(dragListener);
+    const updatePosition = (divisions: number) => {
       node.y = CENTER_Y - divisions * DIVISION_SIZE;
+    };
+    property.link(updatePosition);
+    this.disposeActions.push(() => {
+      property.unlink(updatePosition);
+      node.removeInputListener(dragListener);
+      dragListener.dispose();
     });
     return node;
   }
@@ -318,7 +335,11 @@ export class OscilloscopeDisplayNode extends Node {
         const x = (i / (n - 1)) * DISPLAY_WIDTH;
         const raw = CENTER_Y - (model.mathTrace[i] ?? 0) * pxPerVolt;
         const y = Math.max(-2, Math.min(DISPLAY_HEIGHT + 2, raw));
-        i === 0 ? shape.moveTo(x, y) : shape.lineTo(x, y);
+        if (i === 0) {
+          shape.moveTo(x, y);
+        } else {
+          shape.lineTo(x, y);
+        }
       }
       this.mathPath.shape = shape;
     } else {
@@ -351,7 +372,11 @@ export class OscilloscopeDisplayNode extends Node {
       const y = CENTER_Y - s2 * (y2[i] ?? 0) * pxY;
       const cx = Math.max(-2, Math.min(DISPLAY_WIDTH + 2, x));
       const cy = Math.max(-2, Math.min(DISPLAY_HEIGHT + 2, y));
-      i === 0 ? shape.moveTo(cx, cy) : shape.lineTo(cx, cy);
+      if (i === 0) {
+        shape.moveTo(cx, cy);
+      } else {
+        shape.lineTo(cx, cy);
+      }
     }
     return shape;
   }
@@ -369,8 +394,20 @@ export class OscilloscopeDisplayNode extends Node {
     for (let k = 0; k < bins; k++) {
       const x = (k / (bins - 1)) * DISPLAY_WIDTH;
       const y = baseY - (magnitudes[k] ?? 0) * usableHeight;
-      k === 0 ? shape.moveTo(x, y) : shape.lineTo(x, y);
+      if (k === 0) {
+        shape.moveTo(x, y);
+      } else {
+        shape.lineTo(x, y);
+      }
     }
     return shape;
+  }
+
+  public override dispose(): void {
+    for (const teardown of this.disposeActions) {
+      teardown();
+    }
+    this.disposeActions.length = 0;
+    super.dispose();
   }
 }

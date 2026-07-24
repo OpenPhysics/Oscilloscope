@@ -215,6 +215,8 @@ export class OscilloscopeModel implements TModel {
     this.ch1HasData = this.fillChannel(this.ch1Buffer, 0, ch1Audio);
     this.applyCoupling(this.ch1Buffer, this.ch1.couplingProperty.value);
 
+    // CH2 always samples the function generator (never the microphone): it is the
+    // phase-shifted reference channel for dual-trace / phase comparisons.
     this.ch2HasData = this.fillChannel(this.ch2Buffer, this.functionGenerator.phaseProperty.value, false);
     this.applyCoupling(this.ch2Buffer, this.ch2.couplingProperty.value);
 
@@ -246,8 +248,10 @@ export class OscilloscopeModel implements TModel {
     const fg = this.functionGenerator;
     const t0 = this.triggerOffsetSeconds;
     const hShift = this.horizontalPositionProperty.value * this.effectiveTimePerDivision;
+    // The trigger event (t0) sits at the horizontal center of the display, as on a
+    // real bench scope, so the `-0.5` places the center column at the crossing.
     for (let i = 0; i < n; i++) {
-      const t = t0 + (i / (n - 1)) * windowSeconds - hShift;
+      const t = t0 + (i / (n - 1) - 0.5) * windowSeconds - hShift;
       buffer[i] = fg.voltageAt(t, phaseDegrees);
     }
     return true;

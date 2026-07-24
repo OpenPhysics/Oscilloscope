@@ -111,6 +111,42 @@ describe("OscilloscopeModel", () => {
     model.dispose();
   });
 
+  it("centers the trigger crossing on the display for a rising-edge trigger", () => {
+    const model = new OscilloscopeModel();
+    model.functionGenerator.waveformProperty.value = "sine";
+    model.functionGenerator.amplitudeProperty.value = 1;
+    model.trigger.sourceProperty.value = "ch1";
+    model.trigger.slopeProperty.value = "rising";
+    model.trigger.levelProperty.value = 0;
+    model.refresh();
+
+    const trace = model.ch1Trace;
+    const center = Math.round((trace.length - 1) / 2);
+    // The trigger event sits at screen center: the center sample is at the level …
+    expect(Math.abs(trace[center] ?? 0)).toBeLessThan(0.05);
+    // … and the trace is rising there (a later sample is higher).
+    expect(trace[center + 5] ?? 0).toBeGreaterThan(trace[center] ?? 0);
+    model.dispose();
+  });
+
+  it("aligns the center sample to the trigger level and slope", () => {
+    const model = new OscilloscopeModel();
+    model.functionGenerator.waveformProperty.value = "sine";
+    model.functionGenerator.amplitudeProperty.value = 1;
+    model.trigger.sourceProperty.value = "ch1";
+    model.trigger.slopeProperty.value = "falling";
+    model.trigger.levelProperty.value = 0.5;
+    model.refresh();
+
+    const trace = model.ch1Trace;
+    const center = Math.round((trace.length - 1) / 2);
+    // Center sample sits at the (non-zero) trigger level …
+    expect(Math.abs((trace[center] ?? 0) - 0.5)).toBeLessThan(0.05);
+    // … and is falling there for a falling-slope trigger.
+    expect(trace[center + 5] ?? 0).toBeLessThan(trace[center] ?? 0);
+    model.dispose();
+  });
+
   it("reset() restores the source, sensitivities, and generator", () => {
     const model = new OscilloscopeModel();
     model.sourceProperty.value = "audio";
