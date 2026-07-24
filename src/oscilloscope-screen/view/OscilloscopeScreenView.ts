@@ -13,12 +13,13 @@
  */
 
 import type { TReadOnlyProperty } from "scenerystack/axon";
-import { NumberProperty } from "scenerystack/axon";
+import { DerivedProperty, NumberProperty } from "scenerystack/axon";
 import { Bounds2 } from "scenerystack/dot";
 import { Node } from "scenerystack/scenery";
 import { ResetAllButton } from "scenerystack/scenery-phet";
 import type { ScreenViewOptions } from "scenerystack/sim";
 import { ScreenView } from "scenerystack/sim";
+import { downloadTextFile, triggerBlobDownload } from "../../common/downloadFile.js";
 import { FLAT_RESET_ALL_BUTTON_OPTIONS } from "../../common/SimButtonOptions.js";
 import {
   HORIZONTAL_DIVISIONS,
@@ -29,6 +30,7 @@ import {
 } from "../../SimConstants.js";
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
 import { AcquisitionPanel } from "./AcquisitionPanel.js";
+import { CursorReadoutNode } from "./CursorReadoutNode.js";
 import { HorizontalControlPanel } from "./HorizontalControlPanel.js";
 import { MeasurementReadoutNode } from "./MeasurementReadoutNode.js";
 import { OscilloscopeDisplayNode } from "./OscilloscopeDisplayNode.js";
@@ -56,6 +58,11 @@ export class OscilloscopeScreenView extends ScreenView {
   private readonly measuredVrms = new NumberProperty(0);
   private readonly measuredVmax = new NumberProperty(0);
   private readonly measuredVmin = new NumberProperty(0);
+
+  // Live cursor measurements (Δt, 1/Δt, ΔV).
+  private readonly measuredDeltaTime = new NumberProperty(0);
+  private readonly measuredCursorFrequency = new NumberProperty(0);
+  private readonly measuredDeltaVoltage = new NumberProperty(0);
 
   public constructor(model: OscilloscopeModel, providedOptions: OscilloscopeScreenViewOptions) {
     const { showMeasurementsProperty, ...screenViewOptions } = providedOptions;
@@ -93,6 +100,18 @@ export class OscilloscopeScreenView extends ScreenView {
     readout.top = displayNode.top + 8;
     this.addChild(readout);
 
+    const cursorReadout = new CursorReadoutNode(
+      {
+        deltaTimeProperty: this.measuredDeltaTime,
+        cursorFrequencyProperty: this.measuredCursorFrequency,
+        deltaVoltageProperty: this.measuredDeltaVoltage,
+      },
+      new DerivedProperty([model.cursorsEnabledProperty, model.displayModeProperty], (on, mode) => on && mode === "yt"),
+    );
+    cursorReadout.right = displayNode.right - 8;
+    cursorReadout.top = displayNode.top + 8;
+    this.addChild(cursorReadout);
+
     // ── Front-panel control sections ──────────────────────────────────────────
     const generatorPanel = new SignalGeneratorPanel(model);
     const verticalPanel = new VerticalControlPanel(model);
@@ -101,6 +120,8 @@ export class OscilloscopeScreenView extends ScreenView {
     const acquisitionPanel = new AcquisitionPanel(model, {
       onSingle: () => this.captureSingle(),
       onAutoset: () => this.autoset(),
+      onExportCsv: () => this.exportCsv(),
+      onExportImage: () => this.exportImage(),
     });
 
     // Top-right: generator + vertical side by side.
@@ -211,6 +232,15 @@ export class OscilloscopeScreenView extends ScreenView {
     }
     this.measuredFrequency.value = hz;
     this.measuredPeriod.value = hz > 0 ? 1 / hz : 0;
+
+    // Cursor measurements: Δt (and 1/Δt) from the time cursors, ΔV from the
+    // voltage cursors scaled by the primary channel's sensitivity.
+    const deltaDivisionsTime = Math.abs(model.cursorTime2Property.value - model.cursorTime1Property.value);
+    const deltaTime = deltaDivisionsTime * model.effectiveTimePerDivision;
+    this.measuredDeltaTime.value = deltaTime;
+    this.measuredCursorFrequency.value = deltaTime > 0 ? 1 / deltaTime : 0;
+    const deltaDivisionsVolt = Math.abs(model.cursorVolt1Property.value - model.cursorVolt2Property.value);
+    this.measuredDeltaVoltage.value = deltaDivisionsVolt * model.primaryChannel.voltsPerDivision;
   }
 
   /** Estimates a periodic signal's frequency by counting mean-crossings in the window. */
@@ -290,6 +320,39 @@ export class OscilloscopeScreenView extends ScreenView {
     return best;
   }
 
+  /** Exports the current captured traces (time + enabled channels) as a CSV download. */
+  private exportCsv(): void {
+    const model = this.model;
+    model.refresh();
+    const n = model.sampleCount;
+    const dt = n > 1 ? model.timeWindow / (n - 1) : 0;
+
+    const columns: { header: string; data: Float32Array }[] = [];
+    columns.push({ header: "CH1_V", data: model.ch1Trace });
+    columns.push({ header: "CH2_V", data: model.ch2Trace });
+    if (model.mathModeProperty.value !== "off") {
+      columns.push({ header: "MATH_V", data: model.mathTrace });
+    }
+
+    const lines: string[] = [`time_s,${columns.map((c) => c.header).join(",")}`];
+    for (let i = 0; i < n; i++) {
+      const cells = columns.map((c) => (c.data[i] ?? 0).toPrecision(6));
+      lines.push(`${(i * dt).toPrecision(6)},${cells.join(",")}`);
+    }
+    downloadTextFile("oscilloscope-trace.csv", lines.join("\n"));
+  }
+
+  /** Saves the current CRT display as a PNG image download. */
+  private exportImage(): void {
+    this.displayNode.toCanvas((canvas) => {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          triggerBlobDownload(blob, "oscilloscope.png");
+        }
+      });
+    });
+  }
+
   public reset(): void {
     this.measuredFrequency.reset();
     this.measuredPeriod.reset();
@@ -297,6 +360,9 @@ export class OscilloscopeScreenView extends ScreenView {
     this.measuredVrms.reset();
     this.measuredVmax.reset();
     this.measuredVmin.reset();
+    this.measuredDeltaTime.reset();
+    this.measuredCursorFrequency.reset();
+    this.measuredDeltaVoltage.reset();
     this.model.refresh();
     this.redraw();
   }

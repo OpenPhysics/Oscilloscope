@@ -17,6 +17,7 @@
  */
 
 import { BooleanProperty, NumberProperty, type PhetioProperty, StringUnionProperty } from "scenerystack/axon";
+import { Range } from "scenerystack/dot";
 import type { TModel } from "scenerystack/joist";
 import { TimeModel } from "../../common/TimeModel.js";
 import OscilloscopeNamespace from "../../OscilloscopeNamespace.js";
@@ -27,6 +28,7 @@ import {
   SCOPE_MAGNIFY_FACTOR,
   SCOPE_TIME_PER_DIV_RANGE,
   TRACE_SAMPLE_COUNT,
+  VERTICAL_DIVISIONS,
 } from "../../SimConstants.js";
 import { AudioInput } from "./AudioInput.js";
 import { Channel } from "./Channel.js";
@@ -34,8 +36,11 @@ import { FunctionGenerator } from "./FunctionGenerator.js";
 import { SIGNAL_SOURCES, type SignalSource } from "./SignalSource.js";
 import { Trigger } from "./Trigger.js";
 
-/** How the display plots the channels: Y versus time, or CH1 (X) versus CH2 (Y). */
-export const DISPLAY_MODES = ["yt", "xy"] as const;
+/**
+ * How the display plots the channels: Y versus time, CH1 (X) versus CH2 (Y), or
+ * the frequency spectrum (FFT) of the primary channel.
+ */
+export const DISPLAY_MODES = ["yt", "xy", "fft"] as const;
 export type DisplayMode = (typeof DISPLAY_MODES)[number];
 
 /** The optional CH1±CH2 math trace. */
@@ -97,6 +102,24 @@ export class OscilloscopeModel implements TModel {
     validValues: [...MATH_MODES],
   });
 
+  /** Whether the draggable measurement cursors are shown. */
+  public readonly cursorsEnabledProperty = new BooleanProperty(false);
+
+  // Cursor positions. Time cursors are in horizontal divisions from the left
+  // edge; voltage cursors are in vertical divisions from screen center (up +).
+  public readonly cursorTime1Property = new NumberProperty(HORIZONTAL_DIVISIONS * 0.3, {
+    range: new Range(0, HORIZONTAL_DIVISIONS),
+  });
+  public readonly cursorTime2Property = new NumberProperty(HORIZONTAL_DIVISIONS * 0.7, {
+    range: new Range(0, HORIZONTAL_DIVISIONS),
+  });
+  public readonly cursorVolt1Property = new NumberProperty(VERTICAL_DIVISIONS * 0.25, {
+    range: new Range(-VERTICAL_DIVISIONS / 2, VERTICAL_DIVISIONS / 2),
+  });
+  public readonly cursorVolt2Property = new NumberProperty(-VERTICAL_DIVISIONS * 0.25, {
+    range: new Range(-VERTICAL_DIVISIONS / 2, VERTICAL_DIVISIONS / 2),
+  });
+
   // Reused per-frame trace buffers (volts per horizontal pixel column).
   private readonly ch1Buffer = new Float32Array(TRACE_SAMPLE_COUNT);
   private readonly ch2Buffer = new Float32Array(TRACE_SAMPLE_COUNT);
@@ -152,6 +175,21 @@ export class OscilloscopeModel implements TModel {
   /** Latest CH2 trace (volts per column). Valid after {@link refresh}. */
   public get ch2Trace(): Float32Array {
     return this.ch2Buffer;
+  }
+
+  /** Whether the primary (lowest enabled) channel is CH1. */
+  public get primaryIsCh1(): boolean {
+    return this.ch1.enabledProperty.value || !this.ch2.enabledProperty.value;
+  }
+
+  /** The primary channel (CH1 if enabled, else CH2). */
+  public get primaryChannel(): Channel {
+    return this.primaryIsCh1 ? this.ch1 : this.ch2;
+  }
+
+  /** Latest primary-channel trace (volts per column). Valid after {@link refresh}. */
+  public get primaryTrace(): Float32Array {
+    return this.primaryIsCh1 ? this.ch1Buffer : this.ch2Buffer;
   }
 
   /** Latest math trace (volts per column). Valid after {@link refresh}. */
@@ -286,6 +324,11 @@ export class OscilloscopeModel implements TModel {
     this.displayModeProperty.reset();
     this.persistenceProperty.reset();
     this.mathModeProperty.reset();
+    this.cursorsEnabledProperty.reset();
+    this.cursorTime1Property.reset();
+    this.cursorTime2Property.reset();
+    this.cursorVolt1Property.reset();
+    this.cursorVolt2Property.reset();
   }
 
   public step(dt: number): void {
@@ -306,6 +349,11 @@ export class OscilloscopeModel implements TModel {
     this.displayModeProperty.dispose();
     this.persistenceProperty.dispose();
     this.mathModeProperty.dispose();
+    this.cursorsEnabledProperty.dispose();
+    this.cursorTime1Property.dispose();
+    this.cursorTime2Property.dispose();
+    this.cursorVolt1Property.dispose();
+    this.cursorVolt2Property.dispose();
   }
 }
 

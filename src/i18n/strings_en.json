@@ -46,7 +46,8 @@
     "timePerDivision": "Time/Div",
     "position": "Position",
     "magnify": "×10 Mag",
-    "xyMode": "X-Y"
+    "xyMode": "X-Y",
+    "fft": "FFT"
   },
   "trigger": {
     "title": "Trigger",
@@ -68,6 +69,9 @@
     "single": "Single",
     "autoset": "Autoset",
     "persistence": "Persist",
+    "cursors": "Cursors",
+    "exportCsv": "Save CSV",
+    "exportImage": "Save PNG",
     "math": "Math",
     "mathOff": "Off",
     "mathAdd": "CH1 + CH2",
@@ -81,6 +85,9 @@
     "vrms": "Vrms",
     "vmax": "Vmax",
     "vmin": "Vmin",
+    "deltaTime": "Δt",
+    "deltaVoltage": "ΔV",
+    "cursorFrequency": "1/Δt",
     "none": "—"
   },
   "a11y": {
@@ -116,6 +123,10 @@
       "horizontalPosition": "Horizontal position",
       "magnify": "Ten times horizontal magnifier",
       "xyMode": "X-Y display mode",
+      "fft": "FFT spectrum display mode",
+      "cursors": "Toggle measurement cursors",
+      "exportCsv": "Export the trace data as CSV",
+      "exportImage": "Save the display as a PNG image",
       "triggerSource": "Trigger source",
       "triggerLevel": "Trigger level",
       "triggerSlope": "Trigger slope",

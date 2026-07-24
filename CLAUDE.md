@@ -9,10 +9,11 @@ vertical channels (**CH1 / CH2**), each with its own volts/div, position, AC-DC-
 invert, and on/off. CH1's input is a built-in **function generator** (sine / square / triangle /
 sawtooth / pulse / noise, with amplitude, DC offset, duty cycle, and a CH2 phase shift) or **live
 microphone audio** (Web Audio API). It has a horizontal timebase (time/div, position, ×10 magnify),
-a **trigger** system (source / level / slope / mode, with a draggable on-screen level line), Y-T and
-**X-Y** display modes, a CH1±CH2 **math** trace, optional persistence, Run/Stop, Single, Autoset, and
-live auto-measurements (freq / period / Vpp / Vrms / Vmax / Vmin). Optional signal-noise injection is
-in Preferences.
+a **trigger** system (source / level / slope / mode, with a draggable on-screen level line), Y-T,
+**X-Y**, and **FFT** (spectrum) display modes, a CH1±CH2 **math** trace, optional persistence,
+draggable **measurement cursors** (Δt / 1÷Δt / ΔV), **CSV / PNG export**, Run/Stop, Single, Autoset,
+and live auto-measurements (freq / period / Vpp / Vrms / Vmax / Vmin). Optional signal-noise injection
+is in Preferences.
 
 The defining UI decision: **every panel control is a real-instrument widget — rotary knobs, detented
 rotary switches, and panel buttons — never a slider.** Forked from `OpenPhysics/TemplateSingleSim`,
@@ -51,13 +52,16 @@ it keeps that template's **canonical accessibility** wiring. For multi-screen si
 | `src/oscilloscope-screen/model/FunctionGenerator.ts` | Synthetic source (`voltageAt(t)`, offset/duty/phase, injectable noise) |
 | `src/oscilloscope-screen/model/AudioInput.ts` | Microphone source via Web Audio `AnalyserNode` (degrades gracefully) |
 | `src/oscilloscope-screen/model/Waveform.ts` | Pure normalized waveform-shape evaluator (incl. pulse/noise) |
+| `src/oscilloscope-screen/model/Spectrum.ts` | Pure Hann-windowed radix-2 FFT for the spectrum (FFT) display mode |
 | `src/oscilloscope-screen/model/SignalSource.ts` | `functionGenerator` \| `audio` union |
 | `src/common/controls/RotaryKnob.ts` | Continuous accessible knob (scrub drag + `AccessibleSlider` keyboard) |
 | `src/common/controls/RotarySwitch.ts` | Detented accessible selector (generic over value type) |
 | `src/common/controls/PanelButton.ts` | Front-panel push button with optional indicator LED |
 | `src/common/controls/KnobDragListener.ts` | Scrub-drag pointer behavior for `RotaryKnob` |
 | `src/oscilloscope-screen/view/OscilloscopeScreenView.ts` | Layout, per-frame refresh/redraw, measurements, Autoset, Single, `pdomOrder` |
-| `src/oscilloscope-screen/view/OscilloscopeDisplayNode.ts` | CRT face, graticule, CH1/CH2/math traces, trigger marker, X-Y, persistence |
+| `src/oscilloscope-screen/view/OscilloscopeDisplayNode.ts` | CRT face, graticule, CH1/CH2/math traces, trigger marker, X-Y, FFT, persistence, draggable cursors |
+| `src/oscilloscope-screen/view/CursorReadoutNode.ts` | On-screen Δt / 1÷Δt / ΔV cursor readout overlay |
+| `src/common/downloadFile.ts` | Browser CSV / PNG download helpers (used by trace export) |
 | `src/oscilloscope-screen/view/SignalGeneratorPanel.ts` | Source + waveform switches, freq/ampl/offset/duty/phase knobs |
 | `src/oscilloscope-screen/view/VerticalControlPanel.ts` | Per-channel volts/div, position, coupling, invert, on/off |
 | `src/oscilloscope-screen/view/HorizontalControlPanel.ts` | Time/div, position, ×10 magnify, X-Y |

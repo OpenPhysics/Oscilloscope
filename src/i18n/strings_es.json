@@ -46,7 +46,8 @@
     "timePerDivision": "Tiempo/Div",
     "position": "Posición",
     "magnify": "×10 Amp",
-    "xyMode": "X-Y"
+    "xyMode": "X-Y",
+    "fft": "FFT"
   },
   "trigger": {
     "title": "Disparo",
@@ -68,6 +69,9 @@
     "single": "Único",
     "autoset": "Autoajuste",
     "persistence": "Persist.",
+    "cursors": "Cursores",
+    "exportCsv": "Guardar CSV",
+    "exportImage": "Guardar PNG",
     "math": "Mate",
     "mathOff": "No",
     "mathAdd": "CH1 + CH2",
@@ -81,6 +85,9 @@
     "vrms": "Vrms",
     "vmax": "Vmáx",
     "vmin": "Vmín",
+    "deltaTime": "Δt",
+    "deltaVoltage": "ΔV",
+    "cursorFrequency": "1/Δt",
     "none": "—"
   },
   "a11y": {
@@ -116,6 +123,10 @@
       "horizontalPosition": "Posición horizontal",
       "magnify": "Amplificador horizontal diez veces",
       "xyMode": "Modo de pantalla X-Y",
+      "fft": "Modo de pantalla de espectro FFT",
+      "cursors": "Alternar los cursores de medición",
+      "exportCsv": "Exportar los datos de la traza como CSV",
+      "exportImage": "Guardar la pantalla como imagen PNG",
       "triggerSource": "Fuente de disparo",
       "triggerLevel": "Nivel de disparo",
       "triggerSlope": "Pendiente de disparo",

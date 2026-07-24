@@ -46,7 +46,8 @@
     "timePerDivision": "Temps/Div",
     "position": "Position",
     "magnify": "×10 Amp",
-    "xyMode": "X-Y"
+    "xyMode": "X-Y",
+    "fft": "FFT"
   },
   "trigger": {
     "title": "Déclenchement",
@@ -68,6 +69,9 @@
     "single": "Unique",
     "autoset": "Auto-réglage",
     "persistence": "Persist.",
+    "cursors": "Curseurs",
+    "exportCsv": "Enreg. CSV",
+    "exportImage": "Enreg. PNG",
     "math": "Math",
     "mathOff": "Non",
     "mathAdd": "CH1 + CH2",
@@ -81,6 +85,9 @@
     "vrms": "Veff",
     "vmax": "Vmax",
     "vmin": "Vmin",
+    "deltaTime": "Δt",
+    "deltaVoltage": "ΔV",
+    "cursorFrequency": "1/Δt",
     "none": "—"
   },
   "a11y": {
@@ -116,6 +123,10 @@
       "horizontalPosition": "Position horizontale",
       "magnify": "Amplificateur horizontal dix fois",
       "xyMode": "Mode d'affichage X-Y",
+      "fft": "Mode d'affichage du spectre FFT",
+      "cursors": "Activer les curseurs de mesure",
+      "exportCsv": "Exporter les données de la trace en CSV",
+      "exportImage": "Enregistrer l'affichage en image PNG",
       "triggerSource": "Source de déclenchement",
       "triggerLevel": "Niveau de déclenchement",
       "triggerSlope": "Pente de déclenchement",

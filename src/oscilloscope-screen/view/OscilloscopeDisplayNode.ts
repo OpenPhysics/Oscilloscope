@@ -10,6 +10,8 @@
  * buffers and control state directly from the model and redraws.
  */
 
+import type { PhetioProperty } from "scenerystack/axon";
+import { clamp } from "scenerystack/dot";
 import { Shape } from "scenerystack/kite";
 import { DragListener, Node, type NodeOptions, Path, Rectangle } from "scenerystack/scenery";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
@@ -24,6 +26,7 @@ import {
 } from "../../SimConstants.js";
 import type { Channel } from "../model/Channel.js";
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
+import { computeMagnitudeSpectrum } from "../model/Spectrum.js";
 
 const SUBDIVISIONS = 5;
 const TICK_LENGTH = 5;
@@ -40,9 +43,11 @@ export class OscilloscopeDisplayNode extends Node {
   private readonly ch2Path: Path;
   private readonly mathPath: Path;
   private readonly xyPath: Path;
+  private readonly fftPath: Path;
   private readonly ghostPath: Path;
   private readonly triggerMarker: Node;
   private readonly triggerLine: Path;
+  private readonly cursorLayer: Node;
 
   private previousCh1Shape: Shape | null = null;
 
@@ -115,8 +120,14 @@ export class OscilloscopeDisplayNode extends Node {
       lineJoin: "round",
       lineCap: "round",
     });
+    this.fftPath = new Path(null, {
+      stroke: OscilloscopeColors.traceColorProperty,
+      lineWidth: 2,
+      lineJoin: "round",
+      lineCap: "round",
+    });
     const traceLayer = new Node({
-      children: [this.ghostPath, this.mathPath, this.ch2Path, this.ch1Path, this.xyPath],
+      children: [this.ghostPath, this.mathPath, this.ch2Path, this.ch1Path, this.xyPath, this.fftPath],
       clipArea: Shape.rect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT),
     });
     this.addChild(traceLayer);
@@ -148,7 +159,65 @@ export class OscilloscopeDisplayNode extends Node {
     );
     this.addChild(this.triggerMarker);
 
+    // ── Draggable measurement cursors (two time, two voltage) ─────────────────
+    this.cursorLayer = new Node({
+      children: [
+        this.makeTimeCursor(model.cursorTime1Property),
+        this.makeTimeCursor(model.cursorTime2Property),
+        this.makeVoltCursor(model.cursorVolt1Property),
+        this.makeVoltCursor(model.cursorVolt2Property),
+      ],
+    });
+    this.addChild(this.cursorLayer);
+
     this.mutate(providedOptions);
+  }
+
+  /** A vertical, horizontally-draggable time cursor bound to `property` (in divisions). */
+  private makeTimeCursor(property: PhetioProperty<number>): Node {
+    const line = new Path(Shape.lineSegment(0, 0, 0, DISPLAY_HEIGHT), {
+      stroke: OscilloscopeColors.cursorColorProperty,
+      lineWidth: 1,
+      lineDash: [4, 4],
+    });
+    const hit = new Rectangle(-7, 0, 14, DISPLAY_HEIGHT, { fill: "rgba(0,0,0,0.01)" });
+    const node = new Node({ children: [hit, line], cursor: "ew-resize" });
+    node.addInputListener(
+      new DragListener({
+        drag: (event) => {
+          const x = this.globalToLocalPoint(event.pointer.point).x;
+          property.value = clamp((x / DISPLAY_WIDTH) * HORIZONTAL_DIVISIONS, 0, HORIZONTAL_DIVISIONS);
+        },
+      }),
+    );
+    property.link((divisions) => {
+      node.x = (divisions / HORIZONTAL_DIVISIONS) * DISPLAY_WIDTH;
+    });
+    return node;
+  }
+
+  /** A horizontal, vertically-draggable voltage cursor bound to `property` (in divisions from center). */
+  private makeVoltCursor(property: PhetioProperty<number>): Node {
+    const line = new Path(Shape.lineSegment(0, 0, DISPLAY_WIDTH, 0), {
+      stroke: OscilloscopeColors.cursorColorProperty,
+      lineWidth: 1,
+      lineDash: [4, 4],
+    });
+    const hit = new Rectangle(0, -7, DISPLAY_WIDTH, 14, { fill: "rgba(0,0,0,0.01)" });
+    const node = new Node({ children: [hit, line], cursor: "ns-resize" });
+    const halfV = VERTICAL_DIVISIONS / 2;
+    node.addInputListener(
+      new DragListener({
+        drag: (event) => {
+          const y = this.globalToLocalPoint(event.pointer.point).y;
+          property.value = clamp((CENTER_Y - y) / DIVISION_SIZE, -halfV, halfV);
+        },
+      }),
+    );
+    property.link((divisions) => {
+      node.y = CENTER_Y - divisions * DIVISION_SIZE;
+    });
+    return node;
   }
 
   /** Pixels representing one volt on the given channel. */
@@ -192,20 +261,36 @@ export class OscilloscopeDisplayNode extends Node {
   /** Redraws every trace and the trigger marker from current model state. */
   public update(): void {
     const model = this.model;
-    const xy = model.displayModeProperty.value === "xy";
+    const mode = model.displayModeProperty.value;
 
-    if (xy) {
+    if (mode === "xy") {
       this.ch1Path.shape = null;
       this.ch2Path.shape = null;
       this.mathPath.shape = null;
       this.ghostPath.shape = null;
+      this.fftPath.shape = null;
       this.xyPath.shape = this.buildXYShape();
       this.triggerMarker.visible = false;
+      this.cursorLayer.visible = false;
+      return;
+    }
+
+    if (mode === "fft") {
+      this.ch1Path.shape = null;
+      this.ch2Path.shape = null;
+      this.mathPath.shape = null;
+      this.ghostPath.shape = null;
+      this.xyPath.shape = null;
+      this.fftPath.shape = this.buildFFTShape();
+      this.triggerMarker.visible = false;
+      this.cursorLayer.visible = false;
       return;
     }
 
     this.xyPath.shape = null;
+    this.fftPath.shape = null;
     this.triggerMarker.visible = true;
+    this.cursorLayer.visible = model.cursorsEnabledProperty.value;
 
     // Persistence: keep the last CH1 sweep as a faded ghost.
     if (model.persistenceProperty.value) {
@@ -267,6 +352,24 @@ export class OscilloscopeDisplayNode extends Node {
       const cx = Math.max(-2, Math.min(DISPLAY_WIDTH + 2, x));
       const cy = Math.max(-2, Math.min(DISPLAY_HEIGHT + 2, y));
       i === 0 ? shape.moveTo(cx, cy) : shape.lineTo(cx, cy);
+    }
+    return shape;
+  }
+
+  /** Builds the FFT spectrum shape (magnitude vs frequency) of the primary channel. */
+  private buildFFTShape(): Shape {
+    const magnitudes = computeMagnitudeSpectrum(this.model.primaryTrace);
+    const bins = magnitudes.length;
+    const shape = new Shape();
+    if (bins < 2) {
+      return shape;
+    }
+    const baseY = DISPLAY_HEIGHT - 2;
+    const usableHeight = DISPLAY_HEIGHT - 8;
+    for (let k = 0; k < bins; k++) {
+      const x = (k / (bins - 1)) * DISPLAY_WIDTH;
+      const y = baseY - (magnitudes[k] ?? 0) * usableHeight;
+      k === 0 ? shape.moveTo(x, y) : shape.lineTo(x, y);
     }
     return shape;
   }

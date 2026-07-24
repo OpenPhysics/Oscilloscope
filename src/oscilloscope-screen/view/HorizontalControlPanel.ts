@@ -66,18 +66,28 @@ export class HorizontalControlPanel extends SimPanel {
       minWidth: 66,
     });
 
+    const fftButton = new PanelButton({
+      labelStringProperty: h.fftStringProperty,
+      indicatorProperty: new DerivedProperty([model.displayModeProperty], (m) => m === "fft"),
+      accessibleName: a11y.fftStringProperty,
+      listener: () => {
+        model.displayModeProperty.value = model.displayModeProperty.value === "fft" ? "yt" : "fft";
+      },
+      minWidth: 66,
+    });
+
     const content = new VBox({
       align: "left",
       spacing: 10,
       children: [
         new Text(h.titleStringProperty, { font: HEADING_FONT, fill: OscilloscopeColors.textColorProperty }),
         new HBox({ spacing: 14, align: "top", children: [timeSwitch, positionKnob] }),
-        new HBox({ spacing: 10, align: "center", children: [magButton, xyButton] }),
+        new HBox({ spacing: 10, align: "center", children: [magButton, xyButton, fftButton] }),
       ],
     });
 
     super(content);
 
-    this.controlsInOrder = [timeSwitch, positionKnob, magButton, xyButton];
+    this.controlsInOrder = [timeSwitch, positionKnob, magButton, xyButton, fftButton];
   }
 }

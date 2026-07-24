@@ -2,7 +2,8 @@
  * AcquisitionPanel.ts
  *
  * The acquisition / display-control cluster: Run/Stop, Single-shot capture,
- * Autoset, a persistence toggle, and the CH1±CH2 math-channel selector.
+ * Autoset, a persistence toggle, measurement cursors, CSV / PNG export, and the
+ * CH1±CH2 math-channel selector.
  */
 
 import { HBox, type Node, Text, VBox } from "scenerystack/scenery";
@@ -22,6 +23,10 @@ export type AcquisitionPanelOptions = {
   onSingle: () => void;
   /** Auto-scale the display to the current signal. */
   onAutoset: () => void;
+  /** Export the current trace data as a CSV download. */
+  onExportCsv: () => void;
+  /** Save the current display as a PNG download. */
+  onExportImage: () => void;
 };
 
 export class AcquisitionPanel extends SimPanel {
@@ -67,6 +72,30 @@ export class AcquisitionPanel extends SimPanel {
       minWidth: 80,
     });
 
+    const cursorsButton = new PanelButton({
+      labelStringProperty: acq.cursorsStringProperty,
+      indicatorProperty: model.cursorsEnabledProperty,
+      accessibleName: a11y.cursorsStringProperty,
+      listener: () => {
+        model.cursorsEnabledProperty.value = !model.cursorsEnabledProperty.value;
+      },
+      minWidth: 80,
+    });
+
+    const exportCsvButton = new PanelButton({
+      labelStringProperty: acq.exportCsvStringProperty,
+      accessibleName: a11y.exportCsvStringProperty,
+      listener: options.onExportCsv,
+      minWidth: 80,
+    });
+
+    const exportImageButton = new PanelButton({
+      labelStringProperty: acq.exportImageStringProperty,
+      accessibleName: a11y.exportImageStringProperty,
+      listener: options.onExportImage,
+      minWidth: 80,
+    });
+
     const mathSwitch = new RotarySwitch(
       model.mathModeProperty,
       unionItems(MATH_MODES, {
@@ -84,13 +113,23 @@ export class AcquisitionPanel extends SimPanel {
         new Text(acq.titleStringProperty, { font: HEADING_FONT, fill: OscilloscopeColors.textColorProperty }),
         runStopButton,
         new HBox({ spacing: 8, children: [singleButton, autosetButton] }),
-        persistButton,
+        new HBox({ spacing: 8, children: [persistButton, cursorsButton] }),
+        new HBox({ spacing: 8, children: [exportCsvButton, exportImageButton] }),
         mathSwitch,
       ],
     });
 
     super(content);
 
-    this.controlsInOrder = [runStopButton, singleButton, autosetButton, persistButton, mathSwitch];
+    this.controlsInOrder = [
+      runStopButton,
+      singleButton,
+      autosetButton,
+      persistButton,
+      cursorsButton,
+      exportCsvButton,
+      exportImageButton,
+      mathSwitch,
+    ];
   }
 }
