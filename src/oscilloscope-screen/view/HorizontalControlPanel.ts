@@ -82,7 +82,7 @@ export class HorizontalControlPanel extends SimPanel {
       children: [
         new Text(h.titleStringProperty, { font: HEADING_FONT, fill: OscilloscopeColors.textColorProperty }),
         new HBox({ spacing: 14, align: "top", children: [timeSwitch, positionKnob] }),
-        new HBox({ spacing: 10, align: "center", children: [magButton, xyButton, fftButton] }),
+        new VBox({ spacing: 8, align: "center", children: [magButton, xyButton, fftButton] }),
       ],
     });
 

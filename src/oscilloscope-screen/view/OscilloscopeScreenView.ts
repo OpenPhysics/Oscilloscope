@@ -124,27 +124,28 @@ export class OscilloscopeScreenView extends ScreenView {
       onExportImage: () => this.exportImage(),
     });
 
-    // Top-right: generator + vertical side by side.
-    generatorPanel.left = displayNode.right + 20;
-    generatorPanel.top = SCREEN_VIEW_MARGIN;
-    verticalPanel.left = generatorPanel.right + 16;
+    // Right of the display: the core scope sections in the standard bench-scope
+    // order — VERTICAL (CH1 then CH2), then HORIZONTAL, then TRIGGER, left to right.
+    const controlsLeft = displayNode.right + 20;
+    verticalPanel.left = controlsLeft;
     verticalPanel.top = SCREEN_VIEW_MARGIN;
-
-    // Below them: acquisition cluster.
-    acquisitionPanel.left = generatorPanel.left;
-    acquisitionPanel.top = Math.max(generatorPanel.bottom, verticalPanel.bottom) + 16;
-
-    // Below the display: horizontal + trigger.
-    horizontalPanel.left = SCREEN_VIEW_MARGIN;
-    horizontalPanel.top = displayNode.bottom + 16;
+    horizontalPanel.left = verticalPanel.right + 16;
+    horizontalPanel.top = SCREEN_VIEW_MARGIN;
     triggerPanel.left = horizontalPanel.right + 16;
-    triggerPanel.top = horizontalPanel.top;
+    triggerPanel.top = SCREEN_VIEW_MARGIN;
 
-    this.addChild(generatorPanel);
+    // Below the display: the CH1 signal source (function generator) and the
+    // acquisition / display-control cluster.
+    generatorPanel.left = SCREEN_VIEW_MARGIN;
+    generatorPanel.top = displayNode.bottom + 16;
+    acquisitionPanel.left = generatorPanel.right + 16;
+    acquisitionPanel.top = generatorPanel.top;
+
     this.addChild(verticalPanel);
-    this.addChild(acquisitionPanel);
     this.addChild(horizontalPanel);
     this.addChild(triggerPanel);
+    this.addChild(generatorPanel);
+    this.addChild(acquisitionPanel);
 
     // ── Reset All ─────────────────────────────────────────────────────────────
     const resetAllButton = new ResetAllButton({
@@ -164,6 +165,9 @@ export class OscilloscopeScreenView extends ScreenView {
     this.addChild(
       new Node({
         pdomOrder: [
+          ...verticalPanel.controlsInOrder,
+          ...horizontalPanel.controlsInOrder,
+          ...triggerPanel.controlsInOrder,
           generatorPanel.sourceSwitch,
           generatorPanel.waveformSwitch,
           generatorPanel.frequencyKnob,
@@ -171,9 +175,6 @@ export class OscilloscopeScreenView extends ScreenView {
           generatorPanel.offsetKnob,
           generatorPanel.dutyKnob,
           generatorPanel.phaseKnob,
-          ...verticalPanel.controlsInOrder,
-          ...horizontalPanel.controlsInOrder,
-          ...triggerPanel.controlsInOrder,
           ...acquisitionPanel.controlsInOrder,
           resetAllButton,
         ],
