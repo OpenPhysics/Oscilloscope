@@ -49,6 +49,27 @@ export const DISPLAY_HEIGHT = VERTICAL_DIVISIONS * DIVISION_SIZE;
 /** Number of samples plotted across the width of the display (one per ~1 px). */
 export const TRACE_SAMPLE_COUNT = DISPLAY_WIDTH;
 
+// ── On-screen readout overlays (measurement + cursor panels) ──────────────────
+// Shared chrome for the translucent readout panels floated over the CRT face, so
+// the measurement and cursor overlays stay visually identical.
+
+/** Font size of the overlay readout text, in points. */
+export const READOUT_FONT_SIZE = 11;
+
+/** Corner radius of the translucent readout backing, in screen pixels. */
+export const READOUT_CORNER_RADIUS = 4;
+
+/** Inset from the readout backing edge to its text grid, in screen pixels. */
+export const READOUT_INSET = 8;
+
+/** Horizontal / vertical padding added around the readout text grid, in screen pixels. */
+export const READOUT_X_PADDING = 16;
+export const READOUT_Y_PADDING = 12;
+
+/** Column / row spacing inside the readout text grid, in screen pixels. */
+export const READOUT_COLUMN_SPACING = 10;
+export const READOUT_ROW_SPACING = 2;
+
 // ── Function generator defaults / ranges (SI units) ───────────────────────────
 
 /** Signal frequency in hertz. Audible-range default. */

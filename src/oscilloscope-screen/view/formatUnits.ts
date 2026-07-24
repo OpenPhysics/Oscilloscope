@@ -54,3 +54,8 @@ export function formatPercent(fraction: number): string {
 export function formatDegrees(degrees: number): string {
   return `${Math.round(degrees)}°`;
 }
+
+/** Screen-position readout in graticule divisions, e.g. -1.5 → "-1.50 div". */
+export function formatDivisions(divisions: number): string {
+  return `${divisions.toFixed(2)} div`;
+}

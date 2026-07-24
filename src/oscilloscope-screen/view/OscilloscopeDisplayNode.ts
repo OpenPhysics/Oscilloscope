@@ -33,6 +33,32 @@ const TICK_LENGTH = 5;
 const CENTER_X = DISPLAY_WIDTH / 2;
 const CENTER_Y = DISPLAY_HEIGHT / 2;
 
+// ── Trace / marker rendering ──────────────────────────────────────────────────
+/** Stroke width of the CRT-face border, in screen pixels. */
+const FACE_LINE_WIDTH = 3;
+/** Stroke width of the glowing waveform traces, in screen pixels. */
+const TRACE_LINE_WIDTH = 2;
+/** Stroke width of the graticule grid, axes, and cursor/trigger lines, in screen pixels. */
+const THIN_LINE_WIDTH = 1;
+/** Opacity of the persistence "afterglow" ghost of the previous CH1 sweep. */
+const PERSISTENCE_GHOST_OPACITY = 0.28;
+/** How far (px) a trace may be drawn past the display edge before it is clipped. */
+const TRACE_CLIP_MARGIN = 2;
+/** Dash pattern (px on, px off) for the dashed measurement-cursor lines. */
+const CURSOR_LINE_DASH = [4, 4];
+/** Dash pattern (px on, px off) for the dashed trigger-level line. */
+const TRIGGER_LINE_DASH = [6, 4];
+/** Half-thickness (px) of a cursor's invisible pointer hit target. */
+const CURSOR_HIT_TOLERANCE = 7;
+/** Transparent fill giving the otherwise-invisible cursor hit targets a hittable area. */
+const TRANSPARENT_HIT_FILL = "rgba(0, 0, 0, 0.01)";
+/** Half-width / half-height (px) of the trigger-level drag tab drawn at the right edge. */
+const TRIGGER_TAB_DEPTH = 12;
+const TRIGGER_TAB_HALF_HEIGHT = 6;
+/** Bottom inset (px) of the FFT baseline and the headroom left above full-scale bins. */
+const FFT_BASELINE_INSET = 2;
+const FFT_TOP_INSET = 8;
+
 export class OscilloscopeDisplayNode extends Node {
   public readonly displayWidth = DISPLAY_WIDTH;
   public readonly displayHeight = DISPLAY_HEIGHT;
@@ -63,7 +89,7 @@ export class OscilloscopeDisplayNode extends Node {
     const face = new Rectangle(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, {
       fill: OscilloscopeColors.displayBackgroundColorProperty,
       stroke: OscilloscopeColors.displayBorderColorProperty,
-      lineWidth: 3,
+      lineWidth: FACE_LINE_WIDTH,
       cornerRadius: PANEL_CORNER_RADIUS,
     });
     this.addChild(face);
@@ -78,7 +104,9 @@ export class OscilloscopeDisplayNode extends Node {
       const y = r * DIVISION_SIZE;
       gridShape.moveTo(0, y).lineTo(DISPLAY_WIDTH, y);
     }
-    this.addChild(new Path(gridShape, { stroke: OscilloscopeColors.graticuleColorProperty, lineWidth: 1 }));
+    this.addChild(
+      new Path(gridShape, { stroke: OscilloscopeColors.graticuleColorProperty, lineWidth: THIN_LINE_WIDTH }),
+    );
 
     // ── Center cross-hair axes with subdivision ticks ─────────────────────────
     const tickSpacing = DIVISION_SIZE / SUBDIVISIONS;
@@ -91,42 +119,44 @@ export class OscilloscopeDisplayNode extends Node {
     for (let y = tickSpacing; y < DISPLAY_HEIGHT; y += tickSpacing) {
       axisShape.moveTo(CENTER_X - TICK_LENGTH, y).lineTo(CENTER_X + TICK_LENGTH, y);
     }
-    this.addChild(new Path(axisShape, { stroke: OscilloscopeColors.graticuleAxisColorProperty, lineWidth: 1 }));
+    this.addChild(
+      new Path(axisShape, { stroke: OscilloscopeColors.graticuleAxisColorProperty, lineWidth: THIN_LINE_WIDTH }),
+    );
 
     // ── Trace layer (clipped to the CRT face) ─────────────────────────────────
     this.ghostPath = new Path(null, {
       stroke: OscilloscopeColors.channel1ColorProperty,
-      lineWidth: 2,
-      opacity: 0.28,
+      lineWidth: TRACE_LINE_WIDTH,
+      opacity: PERSISTENCE_GHOST_OPACITY,
       lineJoin: "round",
     });
     this.ch1Path = new Path(null, {
       stroke: OscilloscopeColors.channel1ColorProperty,
-      lineWidth: 2,
+      lineWidth: TRACE_LINE_WIDTH,
       lineJoin: "round",
       lineCap: "round",
     });
     this.ch2Path = new Path(null, {
       stroke: OscilloscopeColors.channel2ColorProperty,
-      lineWidth: 2,
+      lineWidth: TRACE_LINE_WIDTH,
       lineJoin: "round",
       lineCap: "round",
     });
     this.mathPath = new Path(null, {
       stroke: OscilloscopeColors.mathTraceColorProperty,
-      lineWidth: 2,
+      lineWidth: TRACE_LINE_WIDTH,
       lineJoin: "round",
       lineCap: "round",
     });
     this.xyPath = new Path(null, {
       stroke: OscilloscopeColors.channel2ColorProperty,
-      lineWidth: 2,
+      lineWidth: TRACE_LINE_WIDTH,
       lineJoin: "round",
       lineCap: "round",
     });
     this.fftPath = new Path(null, {
       stroke: OscilloscopeColors.traceColorProperty,
-      lineWidth: 2,
+      lineWidth: TRACE_LINE_WIDTH,
       lineJoin: "round",
       lineCap: "round",
     });
@@ -139,14 +169,14 @@ export class OscilloscopeDisplayNode extends Node {
     // ── Draggable trigger-level marker ────────────────────────────────────────
     this.triggerLine = new Path(Shape.lineSegment(0, 0, DISPLAY_WIDTH, 0), {
       stroke: OscilloscopeColors.triggerColorProperty,
-      lineWidth: 1,
-      lineDash: [6, 4],
+      lineWidth: THIN_LINE_WIDTH,
+      lineDash: TRIGGER_LINE_DASH,
     });
     const triggerTab = new Path(
       new Shape()
-        .moveTo(DISPLAY_WIDTH - 12, -6)
+        .moveTo(DISPLAY_WIDTH - TRIGGER_TAB_DEPTH, -TRIGGER_TAB_HALF_HEIGHT)
         .lineTo(DISPLAY_WIDTH, 0)
-        .lineTo(DISPLAY_WIDTH - 12, 6)
+        .lineTo(DISPLAY_WIDTH - TRIGGER_TAB_DEPTH, TRIGGER_TAB_HALF_HEIGHT)
         .close(),
       {
         fill: OscilloscopeColors.triggerColorProperty,
@@ -184,10 +214,12 @@ export class OscilloscopeDisplayNode extends Node {
   private makeTimeCursor(property: PhetioProperty<number>): Node {
     const line = new Path(Shape.lineSegment(0, 0, 0, DISPLAY_HEIGHT), {
       stroke: OscilloscopeColors.cursorColorProperty,
-      lineWidth: 1,
-      lineDash: [4, 4],
+      lineWidth: THIN_LINE_WIDTH,
+      lineDash: CURSOR_LINE_DASH,
     });
-    const hit = new Rectangle(-7, 0, 14, DISPLAY_HEIGHT, { fill: "rgba(0,0,0,0.01)" });
+    const hit = new Rectangle(-CURSOR_HIT_TOLERANCE, 0, 2 * CURSOR_HIT_TOLERANCE, DISPLAY_HEIGHT, {
+      fill: TRANSPARENT_HIT_FILL,
+    });
     const node = new Node({ children: [hit, line], cursor: "ew-resize" });
     const dragListener = new DragListener({
       drag: (event) => {
@@ -212,10 +244,12 @@ export class OscilloscopeDisplayNode extends Node {
   private makeVoltCursor(property: PhetioProperty<number>): Node {
     const line = new Path(Shape.lineSegment(0, 0, DISPLAY_WIDTH, 0), {
       stroke: OscilloscopeColors.cursorColorProperty,
-      lineWidth: 1,
-      lineDash: [4, 4],
+      lineWidth: THIN_LINE_WIDTH,
+      lineDash: CURSOR_LINE_DASH,
     });
-    const hit = new Rectangle(0, -7, DISPLAY_WIDTH, 14, { fill: "rgba(0,0,0,0.01)" });
+    const hit = new Rectangle(0, -CURSOR_HIT_TOLERANCE, DISPLAY_WIDTH, 2 * CURSOR_HIT_TOLERANCE, {
+      fill: TRANSPARENT_HIT_FILL,
+    });
     const node = new Node({ children: [hit, line], cursor: "ns-resize" });
     const halfV = VERTICAL_DIVISIONS / 2;
     const dragListener = new DragListener({
@@ -265,7 +299,7 @@ export class OscilloscopeDisplayNode extends Node {
     for (let i = 0; i < n; i++) {
       const x = (i / (n - 1)) * DISPLAY_WIDTH;
       const raw = base - sign * (voltages[i] ?? 0) * pxPerVolt;
-      const y = Math.max(-2, Math.min(DISPLAY_HEIGHT + 2, raw));
+      const y = Math.max(-TRACE_CLIP_MARGIN, Math.min(DISPLAY_HEIGHT + TRACE_CLIP_MARGIN, raw));
       if (i === 0) {
         shape.moveTo(x, y);
       } else {
@@ -334,7 +368,7 @@ export class OscilloscopeDisplayNode extends Node {
       for (let i = 0; i < n; i++) {
         const x = (i / (n - 1)) * DISPLAY_WIDTH;
         const raw = CENTER_Y - (model.mathTrace[i] ?? 0) * pxPerVolt;
-        const y = Math.max(-2, Math.min(DISPLAY_HEIGHT + 2, raw));
+        const y = Math.max(-TRACE_CLIP_MARGIN, Math.min(DISPLAY_HEIGHT + TRACE_CLIP_MARGIN, raw));
         if (i === 0) {
           shape.moveTo(x, y);
         } else {
@@ -370,8 +404,8 @@ export class OscilloscopeDisplayNode extends Node {
     for (let i = 0; i < n; i++) {
       const x = CENTER_X + s1 * (x1[i] ?? 0) * pxX;
       const y = CENTER_Y - s2 * (y2[i] ?? 0) * pxY;
-      const cx = Math.max(-2, Math.min(DISPLAY_WIDTH + 2, x));
-      const cy = Math.max(-2, Math.min(DISPLAY_HEIGHT + 2, y));
+      const cx = Math.max(-TRACE_CLIP_MARGIN, Math.min(DISPLAY_WIDTH + TRACE_CLIP_MARGIN, x));
+      const cy = Math.max(-TRACE_CLIP_MARGIN, Math.min(DISPLAY_HEIGHT + TRACE_CLIP_MARGIN, y));
       if (i === 0) {
         shape.moveTo(cx, cy);
       } else {
@@ -389,8 +423,8 @@ export class OscilloscopeDisplayNode extends Node {
     if (bins < 2) {
       return shape;
     }
-    const baseY = DISPLAY_HEIGHT - 2;
-    const usableHeight = DISPLAY_HEIGHT - 8;
+    const baseY = DISPLAY_HEIGHT - FFT_BASELINE_INSET;
+    const usableHeight = DISPLAY_HEIGHT - FFT_TOP_INSET;
     for (let k = 0; k < bins; k++) {
       const x = (k / (bins - 1)) * DISPLAY_WIDTH;
       const y = baseY - (magnitudes[k] ?? 0) * usableHeight;
