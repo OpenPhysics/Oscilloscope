@@ -1,0 +1,62 @@
+{
+  "title": "Oscilloscope",
+  "screens": {
+    "sim": "Oscilloscope"
+  },
+  "functionGenerator": {
+    "title": "Générateur de fonctions",
+    "waveform": "Forme d'onde",
+    "sine": "Sinusoïdale",
+    "square": "Carrée",
+    "triangle": "Triangulaire",
+    "sawtooth": "Dent de scie",
+    "frequency": "Fréquence (Hz)",
+    "amplitude": "Amplitude (V)"
+  },
+  "source": {
+    "title": "Source du signal",
+    "functionGenerator": "Générateur de fonctions",
+    "audio": "Microphone",
+    "status": {
+      "idle": "Microphone éteint",
+      "requesting": "Demande d'accès au microphone…",
+      "active": "Microphone en direct",
+      "denied": "Accès au microphone refusé",
+      "unsupported": "Microphone non disponible"
+    }
+  },
+  "display": {
+    "title": "Affichage",
+    "timePerDivision": "Temps / div",
+    "voltsPerDivision": "Volts / div"
+  },
+  "measurements": {
+    "frequency": "Fréq {{value}}",
+    "period": "Période {{value}}",
+    "vpp": "Vpp {{value}}"
+  },
+  "a11y": {
+    "screenSummary": {
+      "playArea": "La zone de jeu est un écran d'oscilloscope doté d'une grille sur laquelle est tracée une courbe lumineuse.",
+      "controlArea": "La zone de contrôle permet de choisir la source du signal, de régler le générateur de fonctions, de définir les volts par division et le temps par division, de lancer ou d'arrêter la courbe et de réinitialiser la simulation.",
+      "interactionHint": "Modifiez la forme d'onde, la fréquence et l'amplitude, ou passez au microphone, et observez la réaction de la courbe."
+    },
+    "currentDetails": {
+      "functionGenerator": "L'oscilloscope affiche une onde {{waveform}} à {{frequency}} hertz avec une amplitude de {{amplitude}} volts.",
+      "audioActive": "L'oscilloscope affiche le signal du microphone en direct.",
+      "audioInactive": "La source microphone est sélectionnée mais aucun signal en direct n'est encore disponible."
+    },
+    "controls": {
+      "waveform": "Forme d'onde",
+      "frequency": "Fréquence du signal",
+      "amplitude": "Amplitude du signal",
+      "source": "Source du signal",
+      "timePerDivision": "Temps par division",
+      "voltsPerDivision": "Volts par division"
+    }
+  },
+  "preferences": {
+    "title": "Simulation",
+    "showMeasurements": "Afficher les mesures à l'écran"
+  }
+}

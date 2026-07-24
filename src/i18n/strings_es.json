@@ -1,0 +1,62 @@
+{
+  "title": "Osciloscopio",
+  "screens": {
+    "sim": "Osciloscopio"
+  },
+  "functionGenerator": {
+    "title": "Generador de funciones",
+    "waveform": "Forma de onda",
+    "sine": "Senoidal",
+    "square": "Cuadrada",
+    "triangle": "Triangular",
+    "sawtooth": "Diente de sierra",
+    "frequency": "Frecuencia (Hz)",
+    "amplitude": "Amplitud (V)"
+  },
+  "source": {
+    "title": "Fuente de señal",
+    "functionGenerator": "Generador de funciones",
+    "audio": "Micrófono",
+    "status": {
+      "idle": "Micrófono apagado",
+      "requesting": "Solicitando micrófono…",
+      "active": "Micrófono en vivo",
+      "denied": "Acceso al micrófono denegado",
+      "unsupported": "Micrófono no disponible"
+    }
+  },
+  "display": {
+    "title": "Pantalla",
+    "timePerDivision": "Tiempo / div",
+    "voltsPerDivision": "Voltios / div"
+  },
+  "measurements": {
+    "frequency": "Frec {{value}}",
+    "period": "Período {{value}}",
+    "vpp": "Vpp {{value}}"
+  },
+  "a11y": {
+    "screenSummary": {
+      "playArea": "El área de juego es una pantalla de osciloscopio con una cuadrícula sobre la que se dibuja una traza de forma de onda luminosa.",
+      "controlArea": "El área de control permite elegir la fuente de señal, ajustar el generador de funciones, fijar los voltios por división y el tiempo por división, iniciar o detener la traza y restablecer la simulación.",
+      "interactionHint": "Cambia la forma de onda, la frecuencia y la amplitud, o pasa al micrófono, y observa cómo responde la traza."
+    },
+    "currentDetails": {
+      "functionGenerator": "El osciloscopio muestra una onda {{waveform}} a {{frequency}} hercios con amplitud {{amplitude}} voltios.",
+      "audioActive": "El osciloscopio muestra la señal del micrófono en vivo.",
+      "audioInactive": "La fuente de micrófono está seleccionada pero aún no hay señal en vivo disponible."
+    },
+    "controls": {
+      "waveform": "Forma de onda",
+      "frequency": "Frecuencia de la señal",
+      "amplitude": "Amplitud de la señal",
+      "source": "Fuente de señal",
+      "timePerDivision": "Tiempo por división",
+      "voltsPerDivision": "Voltios por división"
+    }
+  },
+  "preferences": {
+    "title": "Simulación",
+    "showMeasurements": "Mostrar mediciones en pantalla"
+  }
+}
