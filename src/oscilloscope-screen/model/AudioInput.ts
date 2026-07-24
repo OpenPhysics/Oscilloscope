@@ -160,11 +160,16 @@ export class AudioInput {
       }
     }
 
+    // Center the trigger crossing on the display, as on a real scope: read the
+    // window starting half a window before the crossing. Indices are clamped, so
+    // a crossing very early in the buffer simply repeats the earliest sample.
+    const half = Math.floor(windowSamples / 2);
     const lastOut = out.length - 1;
     const lastWin = windowSamples - 1;
     for (let j = 0; j < out.length; j++) {
-      const idx = start + (lastOut === 0 ? 0 : Math.round((j / lastOut) * lastWin));
-      out[j] = this.timeData[Math.min(total - 1, idx)] ?? 0;
+      const offset = lastOut === 0 ? 0 : Math.round((j / lastOut) * lastWin);
+      const idx = start - half + offset;
+      out[j] = this.timeData[Math.max(0, Math.min(total - 1, idx))] ?? 0;
     }
     return true;
   }

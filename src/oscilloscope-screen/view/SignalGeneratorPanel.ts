@@ -90,6 +90,11 @@ export class SignalGeneratorPanel extends SimPanel {
       captionStringProperty: g.dutyStringProperty,
       valueStringProperty: derivedString(fg.dutyCycleProperty, formatPercent),
       accessibleName: controls.dutyStringProperty,
+      // Duty cycle only shapes the square / pulse waveforms.
+      enabledProperty: new DerivedProperty(
+        [fg.waveformProperty],
+        (waveform) => waveform === "square" || waveform === "pulse",
+      ),
     });
     const phaseKnob = new RotaryKnob(fg.phaseProperty, FG_PHASE_RANGE, {
       captionStringProperty: g.phaseStringProperty,
@@ -98,6 +103,8 @@ export class SignalGeneratorPanel extends SimPanel {
       keyboardStep: 5,
       shiftKeyboardStep: 1,
       pageKeyboardStep: 45,
+      // Phase shifts CH2 relative to CH1, so it only matters when CH2 is displayed.
+      enabledProperty: new DerivedProperty([model.ch2.enabledProperty], (on) => on),
     });
 
     const status = src.status;

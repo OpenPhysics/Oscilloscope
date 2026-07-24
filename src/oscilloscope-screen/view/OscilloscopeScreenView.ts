@@ -33,6 +33,7 @@ import { AcquisitionPanel } from "./AcquisitionPanel.js";
 import { CursorReadoutNode } from "./CursorReadoutNode.js";
 import { HorizontalControlPanel } from "./HorizontalControlPanel.js";
 import { MeasurementReadoutNode } from "./MeasurementReadoutNode.js";
+import { estimateFrequency, nearestStep } from "./measurementUtils.js";
 import { OscilloscopeDisplayNode } from "./OscilloscopeDisplayNode.js";
 import { OscilloscopeScreenSummaryContent } from "./OscilloscopeScreenSummaryContent.js";
 import { SignalGeneratorPanel } from "./SignalGeneratorPanel.js";
@@ -202,8 +203,7 @@ export class OscilloscopeScreenView extends ScreenView {
   /** Measures the primary (lowest enabled) channel's displayed trace. */
   private updateMeasurements(): void {
     const model = this.model;
-    const primaryIsCh1 = model.ch1.enabledProperty.value || !model.ch2.enabledProperty.value;
-    const buffer = primaryIsCh1 ? model.ch1Trace : model.ch2Trace;
+    const buffer = model.primaryTrace;
 
     let min = Number.POSITIVE_INFINITY;
     let max = Number.NEGATIVE_INFINITY;
@@ -224,13 +224,10 @@ export class OscilloscopeScreenView extends ScreenView {
     this.measuredVrms.value = Math.sqrt(sumSquares / n);
 
     // Frequency: exact from the generator, or estimated from a live microphone.
-    const audioPrimary = primaryIsCh1 && model.sourceProperty.value === "audio";
-    let hz = 0;
-    if (audioPrimary) {
-      hz = OscilloscopeScreenView.estimateFrequency(buffer, model.timeWindow);
-    } else {
-      hz = model.functionGenerator.frequencyProperty.value;
-    }
+    const audioPrimary = model.primaryIsCh1 && model.sourceProperty.value === "audio";
+    const hz = audioPrimary
+      ? estimateFrequency(buffer, model.timeWindow)
+      : model.functionGenerator.frequencyProperty.value;
     this.measuredFrequency.value = hz;
     this.measuredPeriod.value = hz > 0 ? 1 / hz : 0;
 
@@ -244,29 +241,7 @@ export class OscilloscopeScreenView extends ScreenView {
     this.measuredDeltaVoltage.value = deltaDivisionsVolt * model.primaryChannel.voltsPerDivision;
   }
 
-  /** Estimates a periodic signal's frequency by counting mean-crossings in the window. */
-  private static estimateFrequency(buffer: Float32Array, windowSeconds: number): number {
-    const n = buffer.length;
-    if (n < 2 || windowSeconds <= 0) {
-      return 0;
-    }
-    let mean = 0;
-    for (const v of buffer) {
-      mean += v;
-    }
-    mean /= n;
-    let crossings = 0;
-    for (let i = 1; i < n; i++) {
-      const prev = (buffer[i - 1] ?? 0) - mean;
-      const curr = (buffer[i] ?? 0) - mean;
-      if (prev < 0 && curr >= 0) {
-        crossings++;
-      }
-    }
-    return crossings / windowSeconds;
-  }
-
-  /** Auto-scales the vertical, horizontal, and trigger controls to the generator signal. */
+  /** Auto-scales the vertical, horizontal, and trigger controls to the live signal. */
   private autoset(): void {
     const model = this.model;
     const fg = model.functionGenerator;
@@ -275,50 +250,46 @@ export class OscilloscopeScreenView extends ScreenView {
     model.magnifyProperty.value = false;
     model.horizontalPositionProperty.value = 0;
 
-    // Vertical: aim for a signal ~4 divisions peak-to-peak on CH1.
-    const peak = Math.max(0.01, fg.amplitudeProperty.value + Math.abs(fg.offsetProperty.value));
+    // Bring CH1 up in a known, DC-coupled state, then sample so the measurements
+    // below reflect whichever source (generator or live mic) is feeding it.
     model.ch1.enabledProperty.value = true;
     model.ch1.couplingProperty.value = "DC";
     model.ch1.invertedProperty.value = false;
     model.ch1.positionProperty.value = 0;
-    model.ch1.voltsPerDivisionProperty.value = OscilloscopeScreenView.nearestStep(SCOPE_VOLTS_PER_DIV_STEPS, peak / 2);
+    model.refresh();
+    this.updateMeasurements();
 
-    // Horizontal: aim for ~3 cycles across the screen.
-    const f = fg.frequencyProperty.value;
+    const audioPrimary = model.sourceProperty.value === "audio";
+
+    // Vertical: aim for a signal ~4 divisions peak-to-peak on CH1. From the live
+    // Vpp for the microphone, or the generator's amplitude + offset analytically.
+    const peak = audioPrimary
+      ? Math.max(0.01, this.measuredVpp.value / 2)
+      : Math.max(0.01, fg.amplitudeProperty.value + Math.abs(fg.offsetProperty.value));
+    model.ch1.voltsPerDivisionProperty.value = nearestStep(SCOPE_VOLTS_PER_DIV_STEPS, peak / 2);
+
+    // Horizontal: aim for ~3 cycles across the screen, using the measured frequency
+    // for the mic or the generator's exact frequency otherwise.
+    const f = audioPrimary ? this.measuredFrequency.value : fg.frequencyProperty.value;
     if (f > 0) {
       const targetTimePerDiv = 3 / f / HORIZONTAL_DIVISIONS;
-      model.timePerDivisionProperty.value = OscilloscopeScreenView.nearestStep(
-        SCOPE_TIME_PER_DIV_STEPS,
-        targetTimePerDiv,
-      );
+      model.timePerDivisionProperty.value = nearestStep(SCOPE_TIME_PER_DIV_STEPS, targetTimePerDiv);
     }
 
     // Trigger: level at the signal's DC midpoint, rising edge on CH1, auto mode.
+    // The generator knows its offset; a live mic is centered near zero.
+    const triggerLevel = audioPrimary ? 0 : fg.offsetProperty.value;
     model.trigger.sourceProperty.value = "ch1";
     model.trigger.slopeProperty.value = "rising";
     model.trigger.modeProperty.value = "auto";
     model.trigger.levelProperty.value = Math.max(
       SCOPE_TRIGGER_LEVEL_RANGE.min,
-      Math.min(SCOPE_TRIGGER_LEVEL_RANGE.max, fg.offsetProperty.value),
+      Math.min(SCOPE_TRIGGER_LEVEL_RANGE.max, triggerLevel),
     );
 
     model.timer.isPlayingProperty.value = true;
     model.refresh();
     this.redraw();
-  }
-
-  /** The step in `steps` closest to `target` (steps assumed sorted ascending). */
-  private static nearestStep(steps: readonly number[], target: number): number {
-    let best = steps[0] ?? target;
-    let bestDist = Math.abs(best - target);
-    for (const step of steps) {
-      const dist = Math.abs(step - target);
-      if (dist < bestDist) {
-        best = step;
-        bestDist = dist;
-      }
-    }
-    return best;
   }
 
   /** Exports the current captured traces (time + enabled channels) as a CSV download. */
