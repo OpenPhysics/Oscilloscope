@@ -1,0 +1,62 @@
+{
+  "title": "Oscilloscope",
+  "screens": {
+    "sim": "Oscilloscope"
+  },
+  "functionGenerator": {
+    "title": "Function Generator",
+    "waveform": "Waveform",
+    "sine": "Sine",
+    "square": "Square",
+    "triangle": "Triangle",
+    "sawtooth": "Sawtooth",
+    "frequency": "Frequency (Hz)",
+    "amplitude": "Amplitude (V)"
+  },
+  "source": {
+    "title": "Signal Source",
+    "functionGenerator": "Function Generator",
+    "audio": "Microphone",
+    "status": {
+      "idle": "Microphone off",
+      "requesting": "Requesting microphone…",
+      "active": "Microphone live",
+      "denied": "Microphone access denied",
+      "unsupported": "Microphone not available"
+    }
+  },
+  "display": {
+    "title": "Display",
+    "timePerDivision": "Time / div",
+    "voltsPerDivision": "Volts / div"
+  },
+  "measurements": {
+    "frequency": "Freq {{value}}",
+    "period": "Period {{value}}",
+    "vpp": "Vpp {{value}}"
+  },
+  "a11y": {
+    "screenSummary": {
+      "playArea": "The play area is an oscilloscope screen with a graticule grid on which a glowing waveform trace is drawn.",
+      "controlArea": "The control area lets you choose the signal source, adjust the function generator, set the volts-per-division and time-per-division, run or stop the trace, and reset the simulation.",
+      "interactionHint": "Change the waveform, frequency, and amplitude, or switch to the microphone, and watch the trace respond."
+    },
+    "currentDetails": {
+      "functionGenerator": "The oscilloscope is showing a {{waveform}} wave at {{frequency}} hertz with amplitude {{amplitude}} volts.",
+      "audioActive": "The oscilloscope is showing the live microphone signal.",
+      "audioInactive": "The microphone source is selected but no live signal is available yet."
+    },
+    "controls": {
+      "waveform": "Waveform",
+      "frequency": "Signal frequency",
+      "amplitude": "Signal amplitude",
+      "source": "Signal source",
+      "timePerDivision": "Time per division",
+      "voltsPerDivision": "Volts per division"
+    }
+  },
+  "preferences": {
+    "title": "Simulation",
+    "showMeasurements": "Show on-screen measurements"
+  }
+}
