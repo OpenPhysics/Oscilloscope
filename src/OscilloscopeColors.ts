@@ -165,6 +165,16 @@ const OscilloscopeColors = {
     projector: "#8effc0",
   }),
 
+  /**
+   * Translucent backing behind the on-screen measurement / cursor readout panels,
+   * so their text stays legible over the trace. Kept dark in both profiles to match
+   * the CRT face it floats over.
+   */
+  readoutBackgroundColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "readoutBackground", {
+    default: "rgba(0, 0, 0, 0.55)",
+    projector: "rgba(0, 0, 0, 0.55)",
+  }),
+
   // ── Front-panel hardware chrome (knobs, rotary switches, panel buttons) ───────
   // Physical-instrument look: dark charcoal knobs with a bright indicator in the
   // default (dark) theme; light gray knobs with a dark indicator in projector mode.

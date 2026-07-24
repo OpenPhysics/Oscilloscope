@@ -30,12 +30,13 @@ const oscilloscopeQueryParameters = QueryStringMachine.getAll({
   },
 
   /**
-   * Whether additive signal noise is injected on startup. Also toggled at
+   * Whether additive signal noise is injected on startup. On by default so the
+   * trace looks like a real bench instrument out of the box; can be turned off at
    * runtime in Preferences → Simulation, for signal-to-noise discussions.
    */
   noise: {
     type: "boolean",
-    defaultValue: false,
+    defaultValue: true,
     public: true,
   },
 

@@ -17,7 +17,7 @@ import OscilloscopeColors from "../../OscilloscopeColors.js";
 import { SCOPE_HORIZONTAL_POSITION_RANGE, SCOPE_TIME_PER_DIV_STEPS } from "../../SimConstants.js";
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
 import { derivedString, numberItems } from "./controlHelpers.js";
-import { formatTimePerDiv } from "./formatUnits.js";
+import { formatDivisions, formatTimePerDiv } from "./formatUnits.js";
 
 const HEADING_FONT = new PhetFont({ size: 15, weight: "bold" });
 
@@ -42,7 +42,7 @@ export class HorizontalControlPanel extends SimPanel {
     const positionKnob = new RotaryKnob(model.horizontalPositionProperty, SCOPE_HORIZONTAL_POSITION_RANGE, {
       radius: 20,
       captionStringProperty: h.positionStringProperty,
-      valueStringProperty: derivedString(model.horizontalPositionProperty, (v) => `${v.toFixed(2)} div`),
+      valueStringProperty: derivedString(model.horizontalPositionProperty, formatDivisions),
       accessibleName: a11y.horizontalPositionStringProperty,
     });
 

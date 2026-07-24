@@ -15,9 +15,18 @@ import { GridBox, Rectangle, Text } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
 import { StringManager } from "../../i18n/StringManager.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
+import {
+  READOUT_COLUMN_SPACING,
+  READOUT_CORNER_RADIUS,
+  READOUT_FONT_SIZE,
+  READOUT_INSET,
+  READOUT_ROW_SPACING,
+  READOUT_X_PADDING,
+  READOUT_Y_PADDING,
+} from "../../SimConstants.js";
 import { formatFrequency, formatPeriod, formatVoltage } from "./formatUnits.js";
 
-const READOUT_FONT = new PhetFont(11);
+const READOUT_FONT = new PhetFont(READOUT_FONT_SIZE);
 
 export type MeasurementProperties = {
   /** Signal frequency in Hz; 0 or negative renders as "—". */
@@ -53,8 +62,8 @@ export class MeasurementReadoutNode extends Rectangle {
     const vminString = new DerivedProperty([measurements.vminProperty], formatVoltage);
 
     const grid = new GridBox({
-      xSpacing: 10,
-      ySpacing: 2,
+      xSpacing: READOUT_COLUMN_SPACING,
+      ySpacing: READOUT_ROW_SPACING,
       xAlign: "left",
       rows: [
         [labelText(m.frequencyStringProperty), valueText(freqString)],
@@ -66,12 +75,12 @@ export class MeasurementReadoutNode extends Rectangle {
       ],
     });
 
-    super(0, 0, grid.width + 16, grid.height + 12, {
-      fill: "rgba(0, 0, 0, 0.55)",
-      cornerRadius: 4,
+    super(0, 0, grid.width + READOUT_X_PADDING, grid.height + READOUT_Y_PADDING, {
+      fill: OscilloscopeColors.readoutBackgroundColorProperty,
+      cornerRadius: READOUT_CORNER_RADIUS,
       visibleProperty: showMeasurementsProperty,
     });
-    grid.left = 8;
+    grid.left = READOUT_INSET;
     grid.centerY = this.rectHeight / 2;
     this.addChild(grid);
   }

@@ -21,7 +21,7 @@ import type { Channel } from "../model/Channel.js";
 import { COUPLINGS } from "../model/Coupling.js";
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
 import { derivedString, numberItems, unionItems } from "./controlHelpers.js";
-import { formatVoltsPerDiv } from "./formatUnits.js";
+import { formatDivisions, formatVoltsPerDiv } from "./formatUnits.js";
 
 const HEADING_FONT = new PhetFont({ size: 15, weight: "bold" });
 const CHANNEL_FONT = new PhetFont({ size: 14, weight: "bold" });
@@ -117,7 +117,7 @@ class VerticalControlPanelColumn extends VBox {
     const positionKnob = new RotaryKnob(channel.positionProperty, SCOPE_POSITION_RANGE, {
       radius: 20,
       captionStringProperty: v.positionStringProperty,
-      valueStringProperty: derivedString(channel.positionProperty, (val) => `${val.toFixed(2)} div`),
+      valueStringProperty: derivedString(channel.positionProperty, formatDivisions),
       accessibleName: a11y.position,
     });
 
