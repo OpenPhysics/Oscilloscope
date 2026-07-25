@@ -54,3 +54,29 @@ export function waveformSample(waveform: Waveform, phase: number, duty = 0.5): n
       return 2 * p - 1;
   }
 }
+
+/**
+ * The exact mean (DC component) of one full period of `waveform`, in the same
+ * normalized units as {@link waveformSample}.
+ *
+ * AC coupling needs the signal's true DC component. Estimating it from the mean
+ * of whatever happens to be on screen makes the baseline wander whenever the
+ * time/div knob changes the number of cycles in the window, so the per-period
+ * mean is derived analytically here instead. Only the duty-cycle waveforms have
+ * a non-zero mean: `square` averages `2·duty − 1` and `pulse` averages `duty`;
+ * sine, triangle, sawtooth, and zero-mean noise all integrate to 0 over a period.
+ *
+ * @param waveform - the shape to evaluate
+ * @param duty - high-fraction for square / pulse (defaults to 0.5); ignored otherwise
+ * @returns the mean value over one period, in [-1, 1]
+ */
+export function waveformMean(waveform: Waveform, duty = 0.5): number {
+  switch (waveform) {
+    case "square":
+      return 2 * duty - 1;
+    case "pulse":
+      return duty;
+    default:
+      return 0;
+  }
+}

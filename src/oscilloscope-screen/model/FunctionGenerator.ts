@@ -12,7 +12,7 @@
  * signal-to-noise discussions.
  */
 
-import { BooleanProperty, NumberProperty, type PhetioProperty, StringUnionProperty } from "scenerystack/axon";
+import { BooleanProperty, NumberProperty, StringUnionProperty, type TReadOnlyProperty } from "scenerystack/axon";
 import OscilloscopeNamespace from "../../OscilloscopeNamespace.js";
 import {
   FG_AMPLITUDE_RANGE,
@@ -28,7 +28,7 @@ import {
   FG_OFFSET_RANGE,
   FG_PHASE_RANGE,
 } from "../../SimConstants.js";
-import { WAVEFORMS, type Waveform, waveformSample } from "./Waveform.js";
+import { WAVEFORMS, type Waveform, waveformMean, waveformSample } from "./Waveform.js";
 
 export class FunctionGenerator {
   /** The waveform shape currently being generated. */
@@ -51,18 +51,21 @@ export class FunctionGenerator {
   /** Phase of CH2 relative to CH1, in degrees. */
   public readonly phaseProperty: NumberProperty;
 
-  /** Whether additive noise is injected onto the signal. */
-  public readonly noiseEnabledProperty: PhetioProperty<boolean>;
+  /** Whether additive noise is injected onto the signal. Read-only here; owned by preferences. */
+  public readonly noiseEnabledProperty: TReadOnlyProperty<boolean>;
 
-  /** Amplitude of the additive noise, in volts. */
-  public readonly noiseAmplitudeProperty: PhetioProperty<number>;
+  /** Amplitude of the additive noise, in volts. Read-only here; owned by preferences. */
+  public readonly noiseAmplitudeProperty: TReadOnlyProperty<number>;
 
   // Concrete references to the noise Properties only when this generator owns
   // them (i.e. they were not injected from preferences); used for reset/dispose.
   private readonly ownedNoiseEnabled: BooleanProperty | null;
   private readonly ownedNoiseAmplitude: NumberProperty | null;
 
-  public constructor(noiseEnabledProperty?: PhetioProperty<boolean>, noiseAmplitudeProperty?: PhetioProperty<number>) {
+  public constructor(
+    noiseEnabledProperty?: TReadOnlyProperty<boolean>,
+    noiseAmplitudeProperty?: TReadOnlyProperty<number>,
+  ) {
     this.frequencyProperty = new NumberProperty(FG_DEFAULT_FREQUENCY, {
       range: FG_FREQUENCY_RANGE,
       units: "Hz",
@@ -122,12 +125,31 @@ export class FunctionGenerator {
    * injected noise. This is what the oscilloscope actually displays.
    */
   public voltageAt(t: number, phaseDegrees = 0): number {
-    let v = this.cleanVoltageAt(t, phaseDegrees);
-    if (this.noiseEnabledProperty.value && this.noiseAmplitudeProperty.value > 0) {
-      // Uniform additive noise, independent per sample.
-      v += (Math.random() * 2 - 1) * this.noiseAmplitudeProperty.value;
+    return this.cleanVoltageAt(t, phaseDegrees) + this.noiseSample();
+  }
+
+  /**
+   * One independent additive-noise sample, in volts (0 when noise is disabled).
+   *
+   * Exposed separately so a caller that has already evaluated the clean waveform
+   * can add noise without paying for a second waveform evaluation.
+   */
+  public noiseSample(): number {
+    if (!(this.noiseEnabledProperty.value && this.noiseAmplitudeProperty.value > 0)) {
+      return 0;
     }
-    return v;
+    // Uniform additive noise, independent per sample.
+    return (Math.random() * 2 - 1) * this.noiseAmplitudeProperty.value;
+  }
+
+  /**
+   * The signal's exact DC component, in volts: the generator's offset plus the
+   * mean of the (amplitude-scaled) waveform shape. Used by AC coupling, which
+   * must remove the true DC rather than the mean of the visible window.
+   */
+  public get meanVoltage(): number {
+    const shapeMean = waveformMean(this.waveformProperty.value, this.dutyCycleProperty.value);
+    return this.amplitudeProperty.value * shapeMean + this.offsetProperty.value;
   }
 
   public reset(): void {

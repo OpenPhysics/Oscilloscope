@@ -20,7 +20,7 @@ import { SCOPE_POSITION_RANGE, SCOPE_VOLTS_PER_DIV_RANGE } from "../../SimConsta
 import { COUPLINGS, type Coupling } from "./Coupling.js";
 
 export type ChannelOptions = {
-  /** 1 for CH1, 2 for CH2 — used for labels and tandem names. */
+  /** 1 for CH1, 2 for CH2 — used for labels. */
   readonly index: 1 | 2;
   /** Whether this channel is displayed on power-up. */
   readonly initiallyEnabled: boolean;

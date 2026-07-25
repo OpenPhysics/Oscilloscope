@@ -26,9 +26,6 @@ export const SCREEN_VIEW_MARGIN = 20;
 /** Corner radius shared by control panels and dialogs. */
 export const PANEL_CORNER_RADIUS = 6;
 
-/** Vertical gap between stacked control panels on the right side of the screen. */
-export const PANEL_SPACING = 12;
-
 // ── Oscilloscope display geometry ─────────────────────────────────────────────
 
 /** Number of horizontal graticule divisions (the classic scope has 10). */
@@ -127,13 +124,30 @@ export const SCOPE_TRIGGER_LEVEL_RANGE = new Range(-20, 20); // V
 /** Extra sweep magnification applied when the ×10 (zoom) button is engaged. */
 export const SCOPE_MAGNIFY_FACTOR = 10;
 
+/**
+ * Samples used to scan one waveform period for the trigger crossing. The crossing
+ * is then refined by linear interpolation, so this only bounds how narrow a
+ * feature (e.g. a very low duty-cycle pulse) can be and still be found.
+ */
+export const TRIGGER_SEARCH_STEPS = 512;
+
+/** Keyboard step sizes for the draggable measurement cursors, in divisions. */
+export const CURSOR_KEYBOARD_STEP = 0.1;
+export const CURSOR_SHIFT_KEYBOARD_STEP = 0.01;
+export const CURSOR_PAGE_KEYBOARD_STEP = 1;
+
+/** Travel of the time cursors: the full width of the graticule, in divisions from the left edge. */
+export const CURSOR_TIME_RANGE = new Range(0, HORIZONTAL_DIVISIONS); // div
+
+/** Travel of the voltage cursors, in divisions above/below screen center. */
+export const CURSOR_VOLT_RANGE = new Range(-VERTICAL_DIVISIONS / 2, VERTICAL_DIVISIONS / 2); // div
+
 /** Size of the microphone analyser FFT window (power of two, per Web Audio spec). */
 export const AUDIO_FFT_SIZE = 2048;
 
 OscilloscopeNamespace.register("SimConstants", {
   SCREEN_VIEW_MARGIN,
   PANEL_CORNER_RADIUS,
-  PANEL_SPACING,
   HORIZONTAL_DIVISIONS,
   VERTICAL_DIVISIONS,
   DIVISION_SIZE,

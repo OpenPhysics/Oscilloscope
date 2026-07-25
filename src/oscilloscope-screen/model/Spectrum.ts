@@ -19,30 +19,69 @@ export function largestPowerOfTwoAtMost(n: number): number {
 }
 
 /**
+ * Reusable working buffers for {@link computeMagnitudeSpectrum}.
+ *
+ * The spectrum is recomputed every animation frame while the FFT display mode is
+ * on, so a caller in that hot path should allocate one of these once and pass it
+ * back in rather than churning three typed arrays per frame.
+ */
+export type SpectrumScratch = {
+  readonly re: Float64Array;
+  readonly im: Float64Array;
+  readonly magnitudes: Float32Array;
+};
+
+/** Allocates scratch sized for a transform of `size` points (a power of two). */
+export function createSpectrumScratch(size: number): SpectrumScratch {
+  return {
+    re: new Float64Array(size),
+    im: new Float64Array(size),
+    magnitudes: new Float32Array(size / 2),
+  };
+}
+
+/**
  * Computes the normalized single-sided magnitude spectrum of `samples`.
  *
  * @param samples - real-valued time-domain samples (e.g. a trace buffer)
+ * @param scratch - optional working buffers to reuse; must be sized for
+ *   `largestPowerOfTwoAtMost(samples.length)`, otherwise it is ignored and fresh
+ *   arrays are allocated. When supplied, the returned array *is* `scratch.magnitudes`
+ *   and is overwritten by the next call.
  * @returns magnitudes for bins 0 … N/2-1, normalized so the peak bin is 1
  */
-export function computeMagnitudeSpectrum(samples: Float32Array): Float32Array {
+export function computeMagnitudeSpectrum(samples: Float32Array, scratch?: SpectrumScratch): Float32Array {
   const size = largestPowerOfTwoAtMost(samples.length);
   if (size < 2) {
     return new Float32Array(1);
   }
 
-  const re = new Float64Array(size);
-  const im = new Float64Array(size);
+  const half = size / 2;
+  const usable =
+    scratch !== undefined &&
+    scratch.re.length === size &&
+    scratch.im.length === size &&
+    scratch.magnitudes.length === half
+      ? scratch
+      : null;
 
-  // Hann window reduces spectral leakage from the finite record length.
+  const re = usable ? usable.re : new Float64Array(size);
+  const im = usable ? usable.im : new Float64Array(size);
+  const mag = usable ? usable.magnitudes : new Float32Array(half);
+  if (usable) {
+    im.fill(0);
+  }
+
+  // Periodic Hann window (dividing by `size`, not `size - 1`): the record is
+  // treated as one period of a periodic signal, which is what the DFT assumes, so
+  // this is the form that actually minimizes leakage between bins.
   for (let i = 0; i < size; i++) {
-    const w = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (size - 1));
+    const w = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / size);
     re[i] = (samples[i] ?? 0) * w;
   }
 
   fftInPlace(re, im);
 
-  const half = size / 2;
-  const mag = new Float32Array(half);
   let max = 0;
   for (let k = 0; k < half; k++) {
     const m = Math.hypot(re[k] ?? 0, im[k] ?? 0);

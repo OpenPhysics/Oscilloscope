@@ -25,11 +25,27 @@ it keeps that template's **canonical accessibility** wiring. For multi-screen si
 - **Model** resamples every channel into reusable volts-per-column buffers on `OscilloscopeModel.refresh()`,
   over a time window of `effectiveTimePerDiv × HORIZONTAL_DIVISIONS`. The function generator is analytic
   and trigger-aligned (`computeTriggerOffset()` finds the level/slope crossing → stationary display);
-  the microphone path pulls the latest `AnalyserNode` data with a level/slope trigger. Coupling (AC
-  mean-removal, GND flat line) is applied per channel.
-- **View** redraws the traces every frame in `OscilloscopeScreenView.step()`, but only **resamples**
-  while running — a stopped scope freezes the captured buffer, yet still rescales it live when you turn
-  volts/div or position, like a real STOP.
+  the microphone path pulls the latest `AnalyserNode` data with a level/slope trigger.
+- **Trigger modes are enforced in `refresh()`**: `computeTriggerOffset()` returns `null` when the
+  comparator never fires over a full period, and `auto` free-runs from that, while `normal` and
+  `single` return early so the previous sweep stays frozen. `single` additionally holds once
+  disarmed, so a completed capture does not quietly free-run; taking the capture clears
+  `trigger.armedProperty` and stops the clock. Arming happens on two edges — selecting SINGLE, and
+  `isPlayingProperty` going true (so RUN re-arms). The SINGLE button goes *through* this, not
+  around it.
+- **Two buffers per channel.** The display draws the noisy trace (what a probe really sees); the
+  automatic measurements read a parallel noiseless one. Vmax/Vmin/Vpp are extreme-value statistics,
+  so measuring the noisy trace biased Vpp outward by roughly the noise amplitude.
+- **AC coupling subtracts the signal's analytic DC** (`FunctionGenerator.meanVoltage`, backed by
+  `waveformMean()`), not the mean of the visible window. A window mean depends on how many cycles
+  the current time/div happens to show, which made an asymmetric waveform's baseline jump whenever
+  the timebase knob moved. GND flattens the channel to zero.
+- **View** redraws in `OscilloscopeScreenView.step()`, but only **resamples** while running — a
+  stopped scope freezes the captured buffer, yet still rescales it live when you turn volts/div or
+  position, like a real STOP. Redrawing rebuilds a `Shape` per visible trace, so it is gated on a
+  `redrawDirty` flag: running always sets it, and while stopped only a change to one of the
+  `renderInputs` Properties does. **Anything new that affects drawing must be added to that list**,
+  or a stopped scope will show a stale trace.
 - The **hardware controls** live in `src/common/controls/`: `RotaryKnob` and `RotarySwitch` are built on
   sun's `AccessibleSlider` trait (keyboard/PDOM for free) but render as knobs/switches; `PanelButton`
   wraps a `RectangularPushButton` with an indicator LED.
@@ -60,6 +76,7 @@ it keeps that template's **canonical accessibility** wiring. For multi-screen si
 | `src/common/controls/KnobDragListener.ts` | Scrub-drag pointer behavior for `RotaryKnob` |
 | `src/oscilloscope-screen/view/OscilloscopeScreenView.ts` | Layout, per-frame refresh/redraw, measurements, Autoset, Single, `pdomOrder` |
 | `src/oscilloscope-screen/view/OscilloscopeDisplayNode.ts` | CRT face, graticule, CH1/CH2/math traces, trigger marker, X-Y, FFT, persistence, draggable cursors |
+| `src/oscilloscope-screen/view/MeasurementCursorNode.ts` | One draggable **and keyboard-operable** measurement cursor (`AccessibleSlider`) |
 | `src/oscilloscope-screen/view/CursorReadoutNode.ts` | On-screen Δt / 1÷Δt / ΔV cursor readout overlay |
 | `src/common/downloadFile.ts` | Browser CSV / PNG download helpers (used by trace export) |
 | `src/oscilloscope-screen/view/SignalGeneratorPanel.ts` | Source + waveform switches, freq/ampl/offset/duty/phase knobs |
@@ -138,19 +155,35 @@ flat buttons, editable fields) keeps readable contrast automatically.
 
 ## Accessibility
 
-This template is the **canonical accessibility reference** for OpenPhysics sims. It ships with
-the three required layers wired up: PDOM names, a `OscilloscopeScreenSummaryContent`, and an explicit
-`pdomOrder` + `OscilloscopeKeyboardHelpContent`. A11y strings live under the `a11y` key in each locale
-JSON, exposed via `StringManager.getA11yStrings()`. When building a real sim, make
-`currentDetailsContent` a live `DerivedProperty` over model state and add `accessibleName`s to
-every interactive node. Full convention and checklist: [Baton/ACCESSIBILITY.md](https://github.com/OpenPhysics/Baton/blob/main/ACCESSIBILITY.md).
+Inherited from `TemplateSingleSim`, which is the fleet's canonical accessibility reference. All
+three required layers are wired up: PDOM names on every interactive node, a live
+`OscilloscopeScreenSummaryContent` whose `currentDetailsContent` is a `DerivedProperty` over model
+state, and an explicit `pdomOrder` + `OscilloscopeKeyboardHelpContent`. A11y strings live under the
+`a11y` key in each locale JSON, exposed via `StringManager.getA11yStrings()`. Full convention and
+checklist: [Baton/ACCESSIBILITY.md](https://github.com/OpenPhysics/Baton/blob/main/ACCESSIBILITY.md).
+
+Sim-specific notes:
+
+- **Every control that changes state is keyboard-operable**, including the on-screen ones. The four
+  measurement cursors are `MeasurementCursorNode`s built on `AccessibleSlider` (not plain drag
+  targets), so Δt / 1÷Δt / ΔV is reachable without a pointer; they sit at the end of `pdomOrder`,
+  after the acquisition cluster that reveals them.
+- The trigger-level marker is pointer-only by design — `TriggerControlPanel`'s level knob is its
+  keyboard equivalent and writes the same Property.
+- Numbers interpolated into a11y strings must be rounded explicitly.
+  `PatternStringProperty`'s `decimalPlaces` defaults to `null` (no rounding), and the knobs are
+  continuous, so an unrounded value reads aloud as `1018.1409090909092`. See
+  `OscilloscopeScreenSummaryContent`.
 
 ## Compliance carve-outs
 
-A clean fork of this template rarely needs compliance carve-outs — root `SimConstants.ts`,
-`*Colors.ts`, `*Namespace.ts`, standard screen layout, and full a11y wiring pass Baton's
-compliance check out of the box. Document carve-outs in the forked sim's `CLAUDE.md` only when
-you introduce a deliberate deviation (nested constants, hardcoded interaction fills, etc.).
+Baton's compliance check passes. One documented deviation:
+
+- **`TRANSPARENT_HIT_FILL` in `MeasurementCursorNode.ts`** is a hardcoded `rgba(0, 0, 0, 0.01)`
+  rather than a `ProfileColorProperty`. It is a pointer hit-area affordance, not a themed color —
+  it must stay invisible in every color profile, so routing it through `OscilloscopeColors.ts`
+  would be misleading. The compliance script flags it as a possible hardcoded color; that warning
+  is expected.
 
 ## Testing
 
@@ -161,7 +194,7 @@ Fleet-standard Vitest layout (keep when forking):
 | `vitest.config.ts` | `happy-dom` environment; `setupFiles: ["./tests/setup.ts"]`; `execArgv: ["--expose-gc"]` |
 | `tests/setup.ts` | Canvas / AudioContext mocks + `init({ name: "…" })` before SceneryStack imports |
 | `tests/TimeModel.test.ts` | Sample model unit tests — replace with real physics tests |
-| `tests/memory-leak.test.ts` | WeakRef + `forceGC` dispose regression (fleet pattern) |
+| `tests/memory-leak.test.ts` | WeakRef + `forceGC` dispose regression — models **and** the view components with real teardown (`OscilloscopeDisplayNode`, `MeasurementCursorNode`, `RotaryKnob`, `RotarySwitch`) |
 | `tests/fuzz/fuzz.spec.ts` | Optional Playwright fuzz smoke via joist `?fuzz` |
 | `playwright.config.ts` | Chromium project + Vite webServer for fuzz |
 
@@ -169,7 +202,12 @@ Fleet-standard Vitest layout (keep when forking):
 - Change the `name` passed to `init()` in `tests/setup.ts` to match `package.json` after `npm run rename`.
 - Run `npm test`. CI runs the suite when a `test` script is present.
 - Expand `memory-leak.test.ts` for any component that adds/removes nodes or links Properties at
-  runtime (see OpticsLab for a deep suite).
+  runtime (see OpticsLab for a deep suite). The view cases construct their component against a model
+  that **outlives** it, so a missed `unlink` keeps the component reachable and fails the assertion.
+- The numerics tests assert **accuracy against known-good values**, not just structure:
+  `measurementUtils.test.ts` pins the frequency estimator to <1% error (it used to be quantized to
+  1/windowSeconds), and `OscilloscopeModel.test.ts` pins AC-coupled baseline stability across
+  time/div and the noiseless measurement trace. Keep that style when touching the math.
 - Optional: `npm run test:fuzz` / `test:fuzz:quick` (not part of default CI).
 
 ## Commands

@@ -10,23 +10,31 @@
  * buffers and control state directly from the model and redraws.
  */
 
-import type { PhetioProperty } from "scenerystack/axon";
-import { clamp } from "scenerystack/dot";
 import { Shape } from "scenerystack/kite";
 import { DragListener, Node, type NodeOptions, Path, Rectangle } from "scenerystack/scenery";
+import { StringManager } from "../../i18n/StringManager.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
 import {
+  CURSOR_TIME_RANGE,
+  CURSOR_VOLT_RANGE,
   DISPLAY_HEIGHT,
   DISPLAY_WIDTH,
   DIVISION_SIZE,
   HORIZONTAL_DIVISIONS,
   PANEL_CORNER_RADIUS,
   SCOPE_TRIGGER_LEVEL_RANGE,
+  TRACE_SAMPLE_COUNT,
   VERTICAL_DIVISIONS,
 } from "../../SimConstants.js";
 import type { Channel } from "../model/Channel.js";
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
-import { computeMagnitudeSpectrum } from "../model/Spectrum.js";
+import {
+  computeMagnitudeSpectrum,
+  createSpectrumScratch,
+  largestPowerOfTwoAtMost,
+  type SpectrumScratch,
+} from "../model/Spectrum.js";
+import { MeasurementCursorNode } from "./MeasurementCursorNode.js";
 
 const SUBDIVISIONS = 5;
 const TICK_LENGTH = 5;
@@ -44,14 +52,8 @@ const THIN_LINE_WIDTH = 1;
 const PERSISTENCE_GHOST_OPACITY = 0.28;
 /** How far (px) a trace may be drawn past the display edge before it is clipped. */
 const TRACE_CLIP_MARGIN = 2;
-/** Dash pattern (px on, px off) for the dashed measurement-cursor lines. */
-const CURSOR_LINE_DASH = [4, 4];
 /** Dash pattern (px on, px off) for the dashed trigger-level line. */
 const TRIGGER_LINE_DASH = [6, 4];
-/** Half-thickness (px) of a cursor's invisible pointer hit target. */
-const CURSOR_HIT_TOLERANCE = 7;
-/** Transparent fill giving the otherwise-invisible cursor hit targets a hittable area. */
-const TRANSPARENT_HIT_FILL = "rgba(0, 0, 0, 0.01)";
 /** Half-width / half-height (px) of the trigger-level drag tab drawn at the right edge. */
 const TRIGGER_TAB_DEPTH = 12;
 const TRIGGER_TAB_HALF_HEIGHT = 6;
@@ -60,8 +62,8 @@ const FFT_BASELINE_INSET = 2;
 const FFT_TOP_INSET = 8;
 
 export class OscilloscopeDisplayNode extends Node {
-  public readonly displayWidth = DISPLAY_WIDTH;
-  public readonly displayHeight = DISPLAY_HEIGHT;
+  /** The four measurement cursors, in reading order, for `pdomOrder`. */
+  public readonly cursorsInOrder: MeasurementCursorNode[];
 
   private readonly model: OscilloscopeModel;
 
@@ -77,9 +79,20 @@ export class OscilloscopeDisplayNode extends Node {
 
   private previousCh1Shape: Shape | null = null;
 
+  // Reused FFT working buffers, so the spectrum mode does not allocate three typed
+  // arrays on every animation frame.
+  private readonly spectrumScratch: SpectrumScratch = createSpectrumScratch(
+    largestPowerOfTwoAtMost(TRACE_SAMPLE_COUNT),
+  );
+
   // Teardown for the model-Property links and drag listeners wired up below, so a
   // disposed display node does not keep the (longer-lived) model alive.
   private readonly disposeActions: (() => void)[] = [];
+
+  // Children this node created and therefore owns. Scenery does not dispose a
+  // node's children for it, and each of these carries listeners on sim-lifetime
+  // ProfileColorProperties that would otherwise keep the subtree reachable.
+  private readonly ownedChildren: Node[] = [];
 
   public constructor(model: OscilloscopeModel, providedOptions?: NodeOptions) {
     super();
@@ -93,6 +106,7 @@ export class OscilloscopeDisplayNode extends Node {
       cornerRadius: PANEL_CORNER_RADIUS,
     });
     this.addChild(face);
+    this.ownedChildren.push(face);
 
     // ── Graticule (minor grid lines) ──────────────────────────────────────────
     const gridShape = new Shape();
@@ -104,9 +118,12 @@ export class OscilloscopeDisplayNode extends Node {
       const y = r * DIVISION_SIZE;
       gridShape.moveTo(0, y).lineTo(DISPLAY_WIDTH, y);
     }
-    this.addChild(
-      new Path(gridShape, { stroke: OscilloscopeColors.graticuleColorProperty, lineWidth: THIN_LINE_WIDTH }),
-    );
+    const gridPath = new Path(gridShape, {
+      stroke: OscilloscopeColors.graticuleColorProperty,
+      lineWidth: THIN_LINE_WIDTH,
+    });
+    this.addChild(gridPath);
+    this.ownedChildren.push(gridPath);
 
     // ── Center cross-hair axes with subdivision ticks ─────────────────────────
     const tickSpacing = DIVISION_SIZE / SUBDIVISIONS;
@@ -119,9 +136,12 @@ export class OscilloscopeDisplayNode extends Node {
     for (let y = tickSpacing; y < DISPLAY_HEIGHT; y += tickSpacing) {
       axisShape.moveTo(CENTER_X - TICK_LENGTH, y).lineTo(CENTER_X + TICK_LENGTH, y);
     }
-    this.addChild(
-      new Path(axisShape, { stroke: OscilloscopeColors.graticuleAxisColorProperty, lineWidth: THIN_LINE_WIDTH }),
-    );
+    const axisPath = new Path(axisShape, {
+      stroke: OscilloscopeColors.graticuleAxisColorProperty,
+      lineWidth: THIN_LINE_WIDTH,
+    });
+    this.addChild(axisPath);
+    this.ownedChildren.push(axisPath);
 
     // ── Trace layer (clipped to the CRT face) ─────────────────────────────────
     this.ghostPath = new Path(null, {
@@ -165,6 +185,15 @@ export class OscilloscopeDisplayNode extends Node {
       clipArea: Shape.rect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT),
     });
     this.addChild(traceLayer);
+    this.ownedChildren.push(
+      traceLayer,
+      this.ghostPath,
+      this.mathPath,
+      this.ch2Path,
+      this.ch1Path,
+      this.xyPath,
+      this.fftPath,
+    );
 
     // ── Draggable trigger-level marker ────────────────────────────────────────
     this.triggerLine = new Path(Shape.lineSegment(0, 0, DISPLAY_WIDTH, 0), {
@@ -195,80 +224,35 @@ export class OscilloscopeDisplayNode extends Node {
       triggerDragListener.dispose();
     });
     this.addChild(this.triggerMarker);
+    this.ownedChildren.push(this.triggerMarker, this.triggerLine, triggerTab);
 
     // ── Draggable measurement cursors (two time, two voltage) ─────────────────
-    this.cursorLayer = new Node({
-      children: [
-        this.makeTimeCursor(model.cursorTime1Property),
-        this.makeTimeCursor(model.cursorTime2Property),
-        this.makeVoltCursor(model.cursorVolt1Property),
-        this.makeVoltCursor(model.cursorVolt2Property),
-      ],
-    });
+    // Each is an AccessibleSlider, so the Δt / 1÷Δt / ΔV measurement is reachable
+    // by keyboard and not only by pointer dragging.
+    const cursorNames = StringManager.getInstance().getA11yStrings().controls;
+    this.cursorsInOrder = [
+      new MeasurementCursorNode(model.cursorTime1Property, CURSOR_TIME_RANGE, "time", {
+        accessibleName: cursorNames.cursorTime1StringProperty,
+        pointerToValue: (point) => (this.globalToLocalPoint(point).x / DISPLAY_WIDTH) * HORIZONTAL_DIVISIONS,
+      }),
+      new MeasurementCursorNode(model.cursorTime2Property, CURSOR_TIME_RANGE, "time", {
+        accessibleName: cursorNames.cursorTime2StringProperty,
+        pointerToValue: (point) => (this.globalToLocalPoint(point).x / DISPLAY_WIDTH) * HORIZONTAL_DIVISIONS,
+      }),
+      new MeasurementCursorNode(model.cursorVolt1Property, CURSOR_VOLT_RANGE, "voltage", {
+        accessibleName: cursorNames.cursorVolt1StringProperty,
+        pointerToValue: (point) => (CENTER_Y - this.globalToLocalPoint(point).y) / DIVISION_SIZE,
+      }),
+      new MeasurementCursorNode(model.cursorVolt2Property, CURSOR_VOLT_RANGE, "voltage", {
+        accessibleName: cursorNames.cursorVolt2StringProperty,
+        pointerToValue: (point) => (CENTER_Y - this.globalToLocalPoint(point).y) / DIVISION_SIZE,
+      }),
+    ];
+    this.cursorLayer = new Node({ children: this.cursorsInOrder });
     this.addChild(this.cursorLayer);
+    this.ownedChildren.push(this.cursorLayer, ...this.cursorsInOrder);
 
     this.mutate(providedOptions);
-  }
-
-  /** A vertical, horizontally-draggable time cursor bound to `property` (in divisions). */
-  private makeTimeCursor(property: PhetioProperty<number>): Node {
-    const line = new Path(Shape.lineSegment(0, 0, 0, DISPLAY_HEIGHT), {
-      stroke: OscilloscopeColors.cursorColorProperty,
-      lineWidth: THIN_LINE_WIDTH,
-      lineDash: CURSOR_LINE_DASH,
-    });
-    const hit = new Rectangle(-CURSOR_HIT_TOLERANCE, 0, 2 * CURSOR_HIT_TOLERANCE, DISPLAY_HEIGHT, {
-      fill: TRANSPARENT_HIT_FILL,
-    });
-    const node = new Node({ children: [hit, line], cursor: "ew-resize" });
-    const dragListener = new DragListener({
-      drag: (event) => {
-        const x = this.globalToLocalPoint(event.pointer.point).x;
-        property.value = clamp((x / DISPLAY_WIDTH) * HORIZONTAL_DIVISIONS, 0, HORIZONTAL_DIVISIONS);
-      },
-    });
-    node.addInputListener(dragListener);
-    const updatePosition = (divisions: number) => {
-      node.x = (divisions / HORIZONTAL_DIVISIONS) * DISPLAY_WIDTH;
-    };
-    property.link(updatePosition);
-    this.disposeActions.push(() => {
-      property.unlink(updatePosition);
-      node.removeInputListener(dragListener);
-      dragListener.dispose();
-    });
-    return node;
-  }
-
-  /** A horizontal, vertically-draggable voltage cursor bound to `property` (in divisions from center). */
-  private makeVoltCursor(property: PhetioProperty<number>): Node {
-    const line = new Path(Shape.lineSegment(0, 0, DISPLAY_WIDTH, 0), {
-      stroke: OscilloscopeColors.cursorColorProperty,
-      lineWidth: THIN_LINE_WIDTH,
-      lineDash: CURSOR_LINE_DASH,
-    });
-    const hit = new Rectangle(0, -CURSOR_HIT_TOLERANCE, DISPLAY_WIDTH, 2 * CURSOR_HIT_TOLERANCE, {
-      fill: TRANSPARENT_HIT_FILL,
-    });
-    const node = new Node({ children: [hit, line], cursor: "ns-resize" });
-    const halfV = VERTICAL_DIVISIONS / 2;
-    const dragListener = new DragListener({
-      drag: (event) => {
-        const y = this.globalToLocalPoint(event.pointer.point).y;
-        property.value = clamp((CENTER_Y - y) / DIVISION_SIZE, -halfV, halfV);
-      },
-    });
-    node.addInputListener(dragListener);
-    const updatePosition = (divisions: number) => {
-      node.y = CENTER_Y - divisions * DIVISION_SIZE;
-    };
-    property.link(updatePosition);
-    this.disposeActions.push(() => {
-      property.unlink(updatePosition);
-      node.removeInputListener(dragListener);
-      dragListener.dispose();
-    });
-    return node;
   }
 
   /** Pixels representing one volt on the given channel. */
@@ -417,14 +401,16 @@ export class OscilloscopeDisplayNode extends Node {
 
   /** Builds the FFT spectrum shape (magnitude vs frequency) of the primary channel. */
   private buildFFTShape(): Shape {
-    const magnitudes = computeMagnitudeSpectrum(this.model.primaryTrace);
+    const magnitudes = computeMagnitudeSpectrum(this.model.primaryTrace, this.spectrumScratch);
     const bins = magnitudes.length;
     const shape = new Shape();
     if (bins < 2) {
       return shape;
     }
     const baseY = DISPLAY_HEIGHT - FFT_BASELINE_INSET;
-    const usableHeight = DISPLAY_HEIGHT - FFT_TOP_INSET;
+    // Both insets come off the drawable height, so a full-scale bin lands exactly
+    // FFT_TOP_INSET below the top edge.
+    const usableHeight = DISPLAY_HEIGHT - FFT_TOP_INSET - FFT_BASELINE_INSET;
     for (let k = 0; k < bins; k++) {
       const x = (k / (bins - 1)) * DISPLAY_WIDTH;
       const y = baseY - (magnitudes[k] ?? 0) * usableHeight;
@@ -442,6 +428,14 @@ export class OscilloscopeDisplayNode extends Node {
       teardown();
     }
     this.disposeActions.length = 0;
+
+    // Scenery leaves children alone on dispose, but every one of these holds a
+    // listener on a sim-lifetime color Property; disposing them releases those.
+    for (const child of this.ownedChildren) {
+      child.dispose();
+    }
+    this.ownedChildren.length = 0;
+
     super.dispose();
   }
 }

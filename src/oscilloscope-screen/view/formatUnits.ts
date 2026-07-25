@@ -7,11 +7,16 @@
  *
  * Unit *symbols* (V, Hz, s, …) are internationally standardized and are not
  * translated; only the surrounding sentence labels are localized.
+ *
+ * All rounding goes through `toFixed` from `scenerystack/dot` rather than the
+ * native `Number.prototype.toFixed`, which rounds inconsistently across browsers.
  */
+
+import { toFixed } from "scenerystack/dot";
 
 /** Formats a number with at most `dp` decimals, dropping trailing zeros. */
 function trim(value: number, dp = 3): string {
-  return String(Number(value.toFixed(dp)));
+  return String(Number(toFixed(value, dp)));
 }
 
 /** e.g. 0.05 → "50 mV/div", 0.5 → "500 mV/div", 2 → "2 V/div". */
@@ -42,7 +47,7 @@ export function formatPeriod(seconds: number): string {
 
 /** e.g. 2 → "2.00 V". */
 export function formatVoltage(volts: number): string {
-  return `${volts.toFixed(2)} V`;
+  return `${toFixed(volts, 2)} V`;
 }
 
 /** e.g. 0.5 → "50%". */
@@ -57,5 +62,5 @@ export function formatDegrees(degrees: number): string {
 
 /** Screen-position readout in graticule divisions, e.g. -1.5 → "-1.50 div". */
 export function formatDivisions(divisions: number): string {
-  return `${divisions.toFixed(2)} div`;
+  return `${toFixed(divisions, 2)} div`;
 }

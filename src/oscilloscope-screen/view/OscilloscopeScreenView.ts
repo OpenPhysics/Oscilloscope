@@ -65,6 +65,15 @@ export class OscilloscopeScreenView extends ScreenView {
   private readonly measuredCursorFrequency = new NumberProperty(0);
   private readonly measuredDeltaVoltage = new NumberProperty(0);
 
+  // Redraws rebuild a Shape per visible trace, so they are skipped when nothing
+  // that feeds the drawing has changed. Running always dirties it (fresh samples);
+  // while stopped only a control change does. Starts true to draw the first frame.
+  private redrawDirty = true;
+  private readonly markRedrawDirty = (): void => {
+    this.redrawDirty = true;
+  };
+  private readonly renderInputs: TReadOnlyProperty<unknown>[] = [];
+
   public constructor(model: OscilloscopeModel, providedOptions: OscilloscopeScreenViewOptions) {
     const { showMeasurementsProperty, ...screenViewOptions } = providedOptions;
 
@@ -75,8 +84,6 @@ export class OscilloscopeScreenView extends ScreenView {
     });
 
     this.model = model;
-
-    const popupLayer = new Node();
 
     // ── CRT display + measurement overlay ─────────────────────────────────────
     const displayNode = new OscilloscopeDisplayNode(model, {
@@ -160,9 +167,9 @@ export class OscilloscopeScreenView extends ScreenView {
     });
     this.addChild(resetAllButton);
 
-    this.addChild(popupLayer);
-
     // ── Accessibility: keyboard / reading traversal order ─────────────────────
+    // The measurement cursors follow the acquisition cluster, which is where the
+    // button that reveals them lives.
     this.addChild(
       new Node({
         pdomOrder: [
@@ -177,14 +184,49 @@ export class OscilloscopeScreenView extends ScreenView {
           generatorPanel.dutyKnob,
           generatorPanel.phaseKnob,
           ...acquisitionPanel.controlsInOrder,
+          ...displayNode.cursorsInOrder,
           resetAllButton,
         ],
       }),
     );
 
+    // Everything the drawing depends on. A change to any of these must force a
+    // redraw even when the sweep is stopped, because a stopped scope still
+    // rescales and repositions its frozen trace as the knobs turn.
+    this.renderInputs.push(
+      model.ch1.enabledProperty,
+      model.ch1.voltsPerDivisionProperty,
+      model.ch1.positionProperty,
+      model.ch1.couplingProperty,
+      model.ch1.invertedProperty,
+      model.ch2.enabledProperty,
+      model.ch2.voltsPerDivisionProperty,
+      model.ch2.positionProperty,
+      model.ch2.couplingProperty,
+      model.ch2.invertedProperty,
+      model.displayModeProperty,
+      model.mathModeProperty,
+      model.persistenceProperty,
+      model.cursorsEnabledProperty,
+      model.cursorTime1Property,
+      model.cursorTime2Property,
+      model.cursorVolt1Property,
+      model.cursorVolt2Property,
+      model.trigger.sourceProperty,
+      model.trigger.levelProperty,
+      model.timePerDivisionProperty,
+      model.horizontalPositionProperty,
+      model.magnifyProperty,
+      model.sourceProperty,
+    );
+    for (const property of this.renderInputs) {
+      property.lazyLink(this.markRedrawDirty);
+    }
+
     // Draw an initial trace so the display isn't blank before the first frame.
     model.refresh();
     this.redraw();
+    this.redrawDirty = false;
   }
 
   /** Redraws the traces and recomputes the measurements from the current buffers. */
@@ -193,22 +235,38 @@ export class OscilloscopeScreenView extends ScreenView {
     this.updateMeasurements();
   }
 
-  /** Captures exactly one sweep and stops, like the front-panel SINGLE button. */
+  /**
+   * Arms a one-shot capture, like the front-panel SINGLE button.
+   *
+   * This goes through the trigger's `single` mode rather than around it, so the
+   * sweep waits for a real trigger event and the model stops the clock once the
+   * capture lands. The mode switch and this button therefore agree.
+   */
   private captureSingle(): void {
-    this.model.refresh();
-    this.redraw();
-    this.model.timer.isPlayingProperty.value = false;
+    this.model.trigger.modeProperty.value = "single";
+    this.model.trigger.arm();
+    this.model.timer.isPlayingProperty.value = true;
   }
 
-  /** Measures the primary (lowest enabled) channel's displayed trace. */
+  /** Measures the primary (lowest enabled) channel's captured trace. */
   private updateMeasurements(): void {
     const model = this.model;
-    const buffer = model.primaryTrace;
+
+    // Measure the noiseless signal: Vmax/Vmin/Vpp are extreme-value statistics, so
+    // injected noise only ever pushes them further apart — measuring the displayed
+    // trace overstates Vpp by roughly the noise amplitude.
+    const buffer = model.primaryCleanTrace;
+    const n = buffer.length;
+
+    // INVERT flips the trace on screen, so the readouts must follow it or they
+    // contradict what the user sees. Vpp and Vrms are unchanged by negation.
+    const sign = model.primaryChannel.invertedProperty.value ? -1 : 1;
 
     let min = Number.POSITIVE_INFINITY;
     let max = Number.NEGATIVE_INFINITY;
     let sumSquares = 0;
-    for (const v of buffer) {
+    for (const raw of buffer) {
+      const v = sign * raw;
       if (v < min) {
         min = v;
       }
@@ -217,11 +275,10 @@ export class OscilloscopeScreenView extends ScreenView {
       }
       sumSquares += v * v;
     }
-    const n = buffer.length;
     this.measuredVmax.value = Number.isFinite(max) ? max : 0;
     this.measuredVmin.value = Number.isFinite(min) ? min : 0;
     this.measuredVpp.value = max > min ? max - min : 0;
-    this.measuredVrms.value = Math.sqrt(sumSquares / n);
+    this.measuredVrms.value = n > 0 ? Math.sqrt(sumSquares / n) : 0;
 
     // Frequency: exact from the generator, or estimated from a live microphone.
     const audioPrimary = model.primaryIsCh1 && model.sourceProperty.value === "audio";
@@ -292,24 +349,36 @@ export class OscilloscopeScreenView extends ScreenView {
     this.redraw();
   }
 
-  /** Exports the current captured traces (time + enabled channels) as a CSV download. */
+  /**
+   * Exports the currently captured traces (time + enabled channels) as a CSV
+   * download.
+   *
+   * Deliberately does *not* resample: a stopped scope must export the frozen
+   * trace the user is looking at, and with noise injected a fresh capture would
+   * not match the display even while running.
+   */
   private exportCsv(): void {
     const model = this.model;
-    model.refresh();
     const n = model.sampleCount;
     const dt = n > 1 ? model.timeWindow / (n - 1) : 0;
 
     const columns: { header: string; data: Float32Array }[] = [];
-    columns.push({ header: "CH1_V", data: model.ch1Trace });
-    columns.push({ header: "CH2_V", data: model.ch2Trace });
+    if (model.ch1.enabledProperty.value) {
+      columns.push({ header: "CH1_V", data: model.ch1Trace });
+    }
+    if (model.ch2.enabledProperty.value) {
+      columns.push({ header: "CH2_V", data: model.ch2Trace });
+    }
     if (model.mathModeProperty.value !== "off") {
       columns.push({ header: "MATH_V", data: model.mathTrace });
     }
 
-    const lines: string[] = [`time_s,${columns.map((c) => c.header).join(",")}`];
+    // Every channel off and math off leaves a time-only file rather than a row of
+    // dangling separators.
+    const lines: string[] = [["time_s", ...columns.map((c) => c.header)].join(",")];
     for (let i = 0; i < n; i++) {
       const cells = columns.map((c) => (c.data[i] ?? 0).toPrecision(6));
-      lines.push(`${(i * dt).toPrecision(6)},${cells.join(",")}`);
+      lines.push([(i * dt).toPrecision(6), ...cells].join(","));
     }
     downloadTextFile("oscilloscope-trace.csv", lines.join("\n"));
   }
@@ -343,8 +412,28 @@ export class OscilloscopeScreenView extends ScreenView {
     // Resample only while running (STOP freezes the captured trace) …
     if (this.model.timer.isPlayingProperty.value) {
       this.model.refresh();
+      this.redrawDirty = true;
     }
-    // … but always redraw so control changes rescale the trace live.
-    this.redraw();
+    // … but still redraw after a control change, so a stopped scope rescales its
+    // frozen trace live, exactly as a bench scope does.
+    if (this.redrawDirty) {
+      this.redraw();
+      this.redrawDirty = false;
+    }
+  }
+
+  /**
+   * Unhooks the render-input listeners.
+   *
+   * A `ScreenView` is never removed from the scene graph in this sim, so this is
+   * not reached in normal operation; it exists so the registrations above are
+   * paired and the memory-leak suite can exercise the class.
+   */
+  public override dispose(): void {
+    for (const property of this.renderInputs) {
+      property.unlink(this.markRedrawDirty);
+    }
+    this.renderInputs.length = 0;
+    super.dispose();
   }
 }
