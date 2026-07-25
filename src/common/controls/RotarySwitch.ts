@@ -9,21 +9,23 @@
  *
  * Like {@link RotaryKnob} it is built on {@link AccessibleSlider} (over an internal
  * integer index), so arrow keys, Home/End and Page Up/Down all work and the
- * selection is announced to assistive technology. Dragging the dial (scrub)
- * clicks it from position to position. No slider UI is shown.
+ * selection is announced to assistive technology. Turning the dial (relative
+ * angular drag) clicks it from position to position. No slider UI is shown.
  */
 
 import { DerivedProperty, NumberProperty, Property, type TProperty, type TReadOnlyProperty } from "scenerystack/axon";
-import { clamp, Range, roundSymmetric } from "scenerystack/dot";
+import { clamp, Range, roundSymmetric, Vector2 } from "scenerystack/dot";
 import { optionize } from "scenerystack/phet-core";
 import { Circle, DragListener, Line, Node, type NodeOptions, Text, type TPaint, VBox } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
 import { AccessibleSlider, type AccessibleSliderOptions } from "scenerystack/sun";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
+import { KNOB_SWEEP_RADIANS, knobAngleFromCenter, unwrapAngleDelta } from "./KnobDragListener.js";
 
 const SWEEP_DEGREES = 270;
 const START_DEGREES = -135;
-const STEP_PIXELS = 26; // drag distance that advances one position
+/** Ignore angle samples this close to the dial centre (atan2 is unstable there). */
+const MIN_DRAG_RADIUS = 6;
 
 /** One selectable position of the switch. */
 export type RotarySwitchItem<T> = {
@@ -131,6 +133,8 @@ export class RotarySwitch<T> extends AccessibleSliderNode {
     });
 
     const dial = new Node({ children: [body, innerDisc, ...tickChildren, indicator] });
+    dial.mouseArea = dial.localBounds.dilated(14);
+    dial.touchArea = dial.localBounds.dilated(18);
 
     // ── Caption + selected-position readout ───────────────────────────────────
     const readoutStringProperty = DerivedProperty.deriveAny(
@@ -189,30 +193,51 @@ export class RotarySwitch<T> extends AccessibleSliderNode {
     };
     property.link(propertyListener);
 
-    // ── Pointer scrub: drag advances the dial detent by detent ────────────────
-    let prevX = 0;
-    let prevY = 0;
+    // ── Pointer turn: angular drag advances the dial detent by detent ─────────
+    // Match the visual tick spacing when detents are dense; cap at ~30° so
+    // 2–3 position switches (source, coupling, …) do not need a half-turn.
+    const detentRadians = maxIndex === 0 ? KNOB_SWEEP_RADIANS : KNOB_SWEEP_RADIANS / maxIndex;
+    const stepRadians = Math.min(detentRadians, (30 * Math.PI) / 180);
+    let prevAngle = 0;
+    let hasAngle = false;
     let accum = 0;
     const setIndex = (index: number): void => {
       indexProperty.value = clamp(index, 0, maxIndex);
     };
+    const centerOf = (): Vector2 => dial.localToGlobalPoint(new Vector2(0, 0));
     const dragListener = new DragListener({
       start: (event) => {
         accum = 0;
-        prevX = event.pointer.point.x;
-        prevY = event.pointer.point.y;
+        const center = centerOf();
+        const point = event.pointer.point;
+        if (point.distance(center) < MIN_DRAG_RADIUS) {
+          hasAngle = false;
+          return;
+        }
+        prevAngle = knobAngleFromCenter(center, point);
+        hasAngle = true;
       },
       drag: (event) => {
-        const { x, y } = event.pointer.point;
-        accum += x - prevX - (y - prevY);
-        prevX = x;
-        prevY = y;
-        while (accum >= STEP_PIXELS) {
-          accum -= STEP_PIXELS;
+        const center = centerOf();
+        const point = event.pointer.point;
+        if (point.distance(center) < MIN_DRAG_RADIUS) {
+          hasAngle = false;
+          return;
+        }
+        const angle = knobAngleFromCenter(center, point);
+        if (!hasAngle) {
+          prevAngle = angle;
+          hasAngle = true;
+          return;
+        }
+        accum += unwrapAngleDelta(prevAngle, angle);
+        prevAngle = angle;
+        while (accum >= stepRadians) {
+          accum -= stepRadians;
           setIndex(roundSymmetric(indexProperty.value) + 1);
         }
-        while (accum <= -STEP_PIXELS) {
-          accum += STEP_PIXELS;
+        while (accum <= -stepRadians) {
+          accum += stepRadians;
           setIndex(roundSymmetric(indexProperty.value) - 1);
         }
       },

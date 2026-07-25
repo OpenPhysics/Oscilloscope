@@ -2,9 +2,9 @@
  * OscilloscopeModel.test.ts
  *
  * Unit tests for the top-level model: dual-channel trace sampling for the
- * function-generator source, the time window derived from time/div (with the ×10
+ * function-generator patches, the time window derived from time/div (with the ×10
  * magnifier), input coupling, trigger modes, the noiseless measurement trace,
- * source switching, and reset.
+ * BNC patch exclusivity, and reset.
  *
  * The microphone path is only exercised structurally — the test environment mocks
  * AudioContext and provides no getUserMedia, so the audio source yields a flat
@@ -41,11 +41,33 @@ function extremes(trace: Float32Array): { min: number; max: number } {
 }
 
 describe("OscilloscopeModel", () => {
-  it("defaults to the function-generator source with CH1 on and CH2 off", () => {
+  it("defaults to CH1 patched to function-generator A, with CH2 unpatched and off", () => {
     const model = new OscilloscopeModel();
-    expect(model.sourceProperty.value).toBe("functionGenerator");
+    expect(model.ch1.inputProperty.value).toBe("functionGeneratorA");
+    expect(model.ch2.inputProperty.value).toBe("none");
     expect(model.ch1.enabledProperty.value).toBe(true);
     expect(model.ch2.enabledProperty.value).toBe(false);
+    model.dispose();
+  });
+
+  it("enforces exclusive source-jack occupancy across channels", () => {
+    const model = new OscilloscopeModel();
+    model.ch2.inputProperty.value = "functionGeneratorA";
+    expect(model.ch1.inputProperty.value).toBe("none");
+    expect(model.ch2.inputProperty.value).toBe("functionGeneratorA");
+    model.connectJack(1, "functionGeneratorB");
+    expect(model.ch1.inputProperty.value).toBe("functionGeneratorB");
+    expect(model.channelForJack("functionGeneratorB")).toBe(model.ch1);
+    model.dispose();
+  });
+
+  it("leaves an unpatched channel flat", () => {
+    const model = new OscilloscopeModel();
+    model.ch1.inputProperty.value = "none";
+    model.refresh();
+    for (const v of model.ch1Trace) {
+      expect(v).toBe(0);
+    }
     model.dispose();
   });
 
@@ -112,9 +134,9 @@ describe("OscilloscopeModel", () => {
     model.dispose();
   });
 
-  it("produces a flat line for the audio source with no live microphone", () => {
+  it("produces a flat line for the microphone patch with no live mic", () => {
     const model = new OscilloscopeModel();
-    model.sourceProperty.value = "audio";
+    model.ch1.inputProperty.value = "microphone";
     model.refresh();
     for (const v of model.ch1Trace) {
       expect(v).toBe(0);
@@ -123,15 +145,10 @@ describe("OscilloscopeModel", () => {
   });
 
   it("recaptures the microphone even when the trigger watches CH2", () => {
-    // The audio capture must run on every refresh whichever channel the trigger
-    // watches; otherwise the committed CH1 buffer is filled from stale scratch and
-    // the microphone trace freezes. (A flat-line assertion cannot catch this — the
-    // scratch buffer starts zeroed and there is no live mic under test — so assert
-    // the capture itself.)
     const model = new OscilloscopeModel();
     const fillTrace = vi.spyOn(model.audioInput, "fillTrace");
 
-    model.sourceProperty.value = "audio";
+    model.ch1.inputProperty.value = "microphone";
     model.trigger.sourceProperty.value = "ch2";
     model.refresh();
     expect(fillTrace).toHaveBeenCalledTimes(1);
@@ -139,12 +156,32 @@ describe("OscilloscopeModel", () => {
     model.refresh();
     expect(fillTrace).toHaveBeenCalledTimes(2);
 
-    // …and not at all once CH1 is back on the generator.
-    model.sourceProperty.value = "functionGenerator";
+    model.ch1.inputProperty.value = "functionGeneratorA";
     model.refresh();
     expect(fillTrace).toHaveBeenCalledTimes(2);
 
     fillTrace.mockRestore();
+    model.dispose();
+  });
+
+  it("samples FG B with the configured phase into a channel", () => {
+    const model = new OscilloscopeModel();
+    model.ch1.inputProperty.value = "functionGeneratorA";
+    model.ch2.enabledProperty.value = true;
+    model.ch2.inputProperty.value = "functionGeneratorB";
+    model.functionGenerator.waveformProperty.value = "sine";
+    model.functionGenerator.amplitudeProperty.value = 1;
+    model.functionGenerator.phaseProperty.value = 180;
+    model.refresh();
+
+    // 180° phase makes B the negation of A at every sample.
+    let maxAbsDiffFromNegation = 0;
+    for (let i = 0; i < model.ch1Trace.length; i++) {
+      const a = model.ch1Trace[i] ?? 0;
+      const b = model.ch2Trace[i] ?? 0;
+      maxAbsDiffFromNegation = Math.max(maxAbsDiffFromNegation, Math.abs(b - -a));
+    }
+    expect(maxAbsDiffFromNegation).toBeLessThan(1e-6);
     model.dispose();
   });
 
@@ -347,14 +384,16 @@ describe("OscilloscopeModel", () => {
     });
   });
 
-  it("reset() restores the source, sensitivities, and generator", () => {
+  it("reset() restores the BNC patches, sensitivities, and generator", () => {
     const model = new OscilloscopeModel();
-    model.sourceProperty.value = "audio";
+    model.ch1.inputProperty.value = "microphone";
+    model.ch2.inputProperty.value = "functionGeneratorA";
     model.timePerDivisionProperty.value = 0.01;
     model.ch1.voltsPerDivisionProperty.value = 2;
     model.functionGenerator.frequencyProperty.value = 1000;
     model.reset();
-    expect(model.sourceProperty.value).toBe("functionGenerator");
+    expect(model.ch1.inputProperty.value).toBe("functionGeneratorA");
+    expect(model.ch2.inputProperty.value).toBe("none");
     expect(model.timePerDivisionProperty.value).toBe(0.001);
     expect(model.ch1.voltsPerDivisionProperty.value).toBe(0.5);
     expect(model.functionGenerator.frequencyProperty.value).toBe(FG_DEFAULT_FREQUENCY);

@@ -2,21 +2,26 @@
  * OscilloscopeModel.ts
  *
  * Top-level model for the oscilloscope screen. It owns:
- *   - two vertical input {@link Channel}s (CH1, CH2), each with its own volts/div,
- *     position, coupling, invert, and on/off
- *   - a {@link FunctionGenerator} (sine / square / triangle / sawtooth / pulse /
- *     noise, with amplitude, offset, duty cycle, and a CH2 phase shift)
- *   - an {@link AudioInput} (live microphone), selectable as CH1's input
+ *   - two vertical input {@link Channel}s (CH1, CH2), each with volts/div,
+ *     position, coupling, invert, on/off, and a BNC {@link ChannelInput} patch
+ *   - a {@link FunctionGenerator} with dual outputs A (in-phase) and B (phase)
+ *   - an {@link AudioInput} (live microphone), patchable into either channel
  *   - the horizontal system (time/div, position, ×10 magnify)
  *   - the {@link Trigger} system (source, level, slope, mode)
- *   - display options: Y-T vs X-Y, persistence, and a CH1±CH2 math trace
+ *   - display options: Y-T vs X-Y vs FFT, persistence, and a CH1±CH2 math trace
  *   - a run/stop clock ({@link TimeModel}) — when stopped, the trace freezes
  *
  * Each frame the view calls {@link refresh} to resample every trace, then reads
  * the per-channel buffers to draw. All buffers are reused between frames.
  */
 
-import { BooleanProperty, NumberProperty, StringUnionProperty, type TReadOnlyProperty } from "scenerystack/axon";
+import {
+  BooleanProperty,
+  Multilink,
+  NumberProperty,
+  StringUnionProperty,
+  type TReadOnlyProperty,
+} from "scenerystack/axon";
 import type { TModel } from "scenerystack/joist";
 import { TimeModel } from "../../common/TimeModel.js";
 import OscilloscopeNamespace from "../../OscilloscopeNamespace.js";
@@ -35,9 +40,9 @@ import {
 } from "../../SimConstants.js";
 import { AudioInput } from "./AudioInput.js";
 import { Channel } from "./Channel.js";
+import type { ChannelInput, SignalJack } from "./ChannelInput.js";
 import type { Coupling } from "./Coupling.js";
 import { FunctionGenerator } from "./FunctionGenerator.js";
-import { SIGNAL_SOURCES, type SignalSource } from "./SignalSource.js";
 import { Trigger } from "./Trigger.js";
 
 /**
@@ -77,33 +82,30 @@ export class OscilloscopeModel implements TModel {
   /** Run/Stop clock. Starts running so the trace is live on load. */
   public readonly timer = new TimeModel(true);
 
-  /** The synthetic-signal source. */
+  /** The synthetic-signal source (outputs A and B). */
   public readonly functionGenerator: FunctionGenerator;
 
   /** The live-microphone source. */
   public readonly audioInput = new AudioInput();
 
-  /** Vertical channel 1. */
+  /** Vertical channel 1 — starts patched to function-generator output A. */
   public readonly ch1 = new Channel({
     index: 1,
     initiallyEnabled: true,
     initialVoltsPerDivision: SCOPE_DEFAULT_VOLTS_PER_DIV,
+    initialInput: "functionGeneratorA",
   });
 
-  /** Vertical channel 2 (off by default, like a real scope). */
+  /** Vertical channel 2 (off and unpatched by default, like a real scope). */
   public readonly ch2 = new Channel({
     index: 2,
     initiallyEnabled: false,
     initialVoltsPerDivision: SCOPE_DEFAULT_VOLTS_PER_DIV,
+    initialInput: "none",
   });
 
   /** The trigger system. */
   public readonly trigger = new Trigger();
-
-  /** CH1's input: the function generator, or the live microphone. */
-  public readonly sourceProperty = new StringUnionProperty<SignalSource>("functionGenerator", {
-    validValues: [...SIGNAL_SOURCES],
-  });
 
   /** Horizontal sensitivity, in seconds per division. */
   public readonly timePerDivisionProperty: NumberProperty;
@@ -116,7 +118,7 @@ export class OscilloscopeModel implements TModel {
   /** Whether the ×10 horizontal magnifier is engaged. */
   public readonly magnifyProperty = new BooleanProperty(false);
 
-  /** Y-T versus X-Y display. */
+  /** Y-T versus X-Y versus FFT display. */
   public readonly displayModeProperty = new StringUnionProperty<DisplayMode>("yt", {
     validValues: [...DISPLAY_MODES],
   });
@@ -147,12 +149,6 @@ export class OscilloscopeModel implements TModel {
     range: CURSOR_VOLT_RANGE,
   });
 
-  // Reused per-frame trace buffers (volts per horizontal pixel column). The
-  // `clean` variants hold the same signal without injected noise: the display
-  // draws the noisy trace (that is what a real probe sees) while the automatic
-  // measurements read the clean one, so Vmax/Vmin/Vpp are not biased outward by
-  // noise — min/max are extreme-value statistics and noise only ever pushes them
-  // further apart, never together.
   private readonly ch1Buffer = new Float32Array(TRACE_SAMPLE_COUNT);
   private readonly ch2Buffer = new Float32Array(TRACE_SAMPLE_COUNT);
   private readonly ch1CleanBuffer = new Float32Array(TRACE_SAMPLE_COUNT);
@@ -165,6 +161,7 @@ export class OscilloscopeModel implements TModel {
   private readonly audioScratchBuffer = new Float32Array(TRACE_SAMPLE_COUNT);
 
   private triggerOffsetSeconds = 0;
+  private syncingPatch = false;
 
   public constructor(providedOptions?: OscilloscopeModelOptions) {
     this.functionGenerator = new FunctionGenerator(
@@ -177,9 +174,13 @@ export class OscilloscopeModel implements TModel {
       units: "s",
     });
 
-    // Acquire / release the microphone as CH1's source selection changes.
-    this.sourceProperty.link((source) => {
-      if (source === "audio") {
+    // Exclusive occupancy: each source jack feeds at most one BNC.
+    this.ch1.inputProperty.link((input) => this.enforceExclusivePatch(this.ch1, input));
+    this.ch2.inputProperty.link((input) => this.enforceExclusivePatch(this.ch2, input));
+
+    // Acquire / release the microphone whenever either channel is patched to it.
+    Multilink.multilink([this.ch1.inputProperty, this.ch2.inputProperty], (a, b) => {
+      if (a === "microphone" || b === "microphone") {
         this.audioInput.start().catch(() => {
           /* unreachable — start() catches all failures and sets statusProperty */
         });
@@ -188,16 +189,12 @@ export class OscilloscopeModel implements TModel {
       }
     });
 
-    // Selecting SINGLE arms a fresh capture, matching a bench scope where turning
-    // the mode switch to SINGLE readies the next sweep.
     this.trigger.modeProperty.link((mode) => {
       if (mode === "single") {
         this.trigger.arm();
       }
     });
 
-    // Restarting the sweep re-arms a single-shot capture, so RUN after a completed
-    // SINGLE waits for the next trigger rather than silently doing nothing.
     this.timer.isPlayingProperty.link((isPlaying) => {
       if (isPlaying && this.trigger.modeProperty.value === "single") {
         this.trigger.arm();
@@ -205,55 +202,76 @@ export class OscilloscopeModel implements TModel {
     });
   }
 
-  /** Number of samples per trace. */
+  /** Channel 1 or 2 by index. */
+  public channel(index: 1 | 2): Channel {
+    return index === 1 ? this.ch1 : this.ch2;
+  }
+
+  /** Which channel (if any) currently owns this source jack. */
+  public channelForJack(jack: SignalJack): Channel | null {
+    if (this.ch1.inputProperty.value === jack) {
+      return this.ch1;
+    }
+    if (this.ch2.inputProperty.value === jack) {
+      return this.ch2;
+    }
+    return null;
+  }
+
+  /**
+   * Patch `jack` into `channelIndex`, clearing any other channel that held it
+   * and disconnecting whatever was previously on this BNC.
+   */
+  public connectJack(channelIndex: 1 | 2, jack: SignalJack): void {
+    this.channel(channelIndex).inputProperty.value = jack;
+  }
+
+  /** Unplug the BNC for the given channel. */
+  public disconnectChannel(channelIndex: 1 | 2): void {
+    this.channel(channelIndex).inputProperty.value = "none";
+  }
+
+  /** True when either channel is patched to the microphone. */
+  public get microphoneInUse(): boolean {
+    return this.ch1.inputProperty.value === "microphone" || this.ch2.inputProperty.value === "microphone";
+  }
+
   public get sampleCount(): number {
     return this.ch1Buffer.length;
   }
 
-  /** The time/div actually in effect, accounting for the ×10 magnifier. */
   public get effectiveTimePerDivision(): number {
     return this.timePerDivisionProperty.value / (this.magnifyProperty.value ? SCOPE_MAGNIFY_FACTOR : 1);
   }
 
-  /** The time span, in seconds, currently shown across the whole display. */
   public get timeWindow(): number {
     return this.effectiveTimePerDivision * HORIZONTAL_DIVISIONS;
   }
 
-  /** Latest CH1 trace (volts per column). Valid after {@link refresh}. */
   public get ch1Trace(): Float32Array {
     return this.ch1Buffer;
   }
 
-  /** Latest CH2 trace (volts per column). Valid after {@link refresh}. */
   public get ch2Trace(): Float32Array {
     return this.ch2Buffer;
   }
 
-  /** Whether the primary (lowest enabled) channel is CH1. */
   public get primaryIsCh1(): boolean {
     return this.ch1.enabledProperty.value || !this.ch2.enabledProperty.value;
   }
 
-  /** The primary channel (CH1 if enabled, else CH2). */
   public get primaryChannel(): Channel {
     return this.primaryIsCh1 ? this.ch1 : this.ch2;
   }
 
-  /** Latest primary-channel trace (volts per column). Valid after {@link refresh}. */
   public get primaryTrace(): Float32Array {
     return this.primaryIsCh1 ? this.ch1Buffer : this.ch2Buffer;
   }
 
-  /** Latest math trace (volts per column). Valid after {@link refresh}. */
   public get mathTrace(): Float32Array {
     return this.mathBuffer;
   }
 
-  /**
-   * Latest primary-channel trace with any injected noise removed. This is the
-   * signal the automatic measurements read — see the buffer declarations above.
-   */
   public get primaryCleanTrace(): Float32Array {
     return this.primaryIsCh1 ? this.ch1CleanBuffer : this.ch2CleanBuffer;
   }
@@ -268,13 +286,11 @@ export class OscilloscopeModel implements TModel {
    */
   public refresh(): void {
     const triggerMode = this.trigger.modeProperty.value;
-    const ch1Audio = this.sourceProperty.value === "audio";
+    const micInUse = this.microphoneInUse;
+    const triggerChannel = this.trigger.sourceProperty.value === "ch2" ? this.ch2 : this.ch1;
+    const triggerIsMic = triggerChannel.inputProperty.value === "microphone";
 
-    // Capture the microphone before anything else whenever it is CH1's source —
-    // including when the trigger watches CH2 — because the commit below always
-    // reads this scratch for the audio path. It only reports a trigger as a side
-    // effect of resampling, hence scratch rather than the committed buffer.
-    const audioTriggered = ch1Audio
+    const audioTriggered = micInUse
       ? this.audioInput.fillTrace(
           this.audioScratchBuffer,
           this.timeWindow,
@@ -283,52 +299,34 @@ export class OscilloscopeModel implements TModel {
         )
       : false;
 
-    // Resolve the trigger event. The analytic generator is searched directly; the
-    // microphone's answer already came back from the capture above.
     let triggered: boolean;
-    if (ch1Audio && this.trigger.sourceProperty.value === "ch1") {
+    if (triggerIsMic) {
       triggered = audioTriggered;
       this.triggerOffsetSeconds = 0;
-    } else {
-      const offset = this.computeTriggerOffset();
+    } else if (this.isGeneratorInput(triggerChannel.inputProperty.value)) {
+      const offset = this.computeTriggerOffset(triggerChannel.inputProperty.value);
       triggered = offset !== null;
       this.triggerOffsetSeconds = offset ?? 0;
+    } else {
+      // Unpatched trigger source: free-run in auto; hold otherwise.
+      triggered = false;
+      this.triggerOffsetSeconds = 0;
     }
 
-    // NORMAL and SINGLE show nothing new until the comparator actually fires …
     if (!triggered && triggerMode !== "auto") {
       return;
     }
 
-    // … and a SINGLE that has already taken its capture stays frozen until it is
-    // re-armed, rather than quietly free-running like AUTO.
     if (triggerMode === "single" && !this.trigger.armedProperty.value) {
       return;
     }
 
-    if (ch1Audio) {
-      // A live microphone carries no separable "clean" signal — the captured
-      // samples serve as both the displayed and the measured trace.
-      this.ch1Buffer.set(this.audioScratchBuffer);
-      this.ch1CleanBuffer.set(this.audioScratchBuffer);
-      this.applyCoupling(this.ch1Buffer, this.ch1.couplingProperty.value, windowMean(this.ch1Buffer));
-      this.applyCoupling(this.ch1CleanBuffer, this.ch1.couplingProperty.value, windowMean(this.ch1CleanBuffer));
-    } else {
-      this.fillFromGenerator(this.ch1Buffer, this.ch1CleanBuffer, 0, this.ch1.couplingProperty.value);
-    }
+    this.fillChannel(this.ch1, this.ch1Buffer, this.ch1CleanBuffer);
 
-    // CH2 always samples the function generator (never the microphone): it is the
-    // phase-shifted reference channel for dual-trace / phase comparisons. Skip the
-    // work entirely when nothing on screen can read it.
     const mathMode = this.mathModeProperty.value;
     const ch2Needed = this.ch2.enabledProperty.value || this.displayModeProperty.value === "xy" || mathMode !== "off";
     if (ch2Needed) {
-      this.fillFromGenerator(
-        this.ch2Buffer,
-        this.ch2CleanBuffer,
-        this.functionGenerator.phaseProperty.value,
-        this.ch2.couplingProperty.value,
-      );
+      this.fillChannel(this.ch2, this.ch2Buffer, this.ch2CleanBuffer);
     }
 
     if (mathMode !== "off") {
@@ -340,21 +338,53 @@ export class OscilloscopeModel implements TModel {
       }
     }
 
-    // A single-shot capture is complete: disarm and freeze, like SINGLE on a scope.
     if (triggerMode === "single" && this.trigger.armedProperty.value) {
       this.trigger.armedProperty.value = false;
       this.timer.isPlayingProperty.value = false;
     }
   }
 
-  /**
-   * Samples the function generator across the display window into `buffer` (with
-   * noise, for the display) and `cleanBuffer` (without, for measurements), then
-   * applies the channel's coupling to both.
-   *
-   * The waveform is evaluated once per column and the noise added on top, rather
-   * than evaluating the generator twice.
-   */
+  private enforceExclusivePatch(changed: Channel, input: ChannelInput): void {
+    if (this.syncingPatch || input === "none") {
+      return;
+    }
+    const other = changed === this.ch1 ? this.ch2 : this.ch1;
+    if (other.inputProperty.value === input) {
+      this.syncingPatch = true;
+      other.inputProperty.value = "none";
+      this.syncingPatch = false;
+    }
+  }
+
+  private isGeneratorInput(input: ChannelInput): input is "functionGeneratorA" | "functionGeneratorB" {
+    return input === "functionGeneratorA" || input === "functionGeneratorB";
+  }
+
+  private phaseForInput(input: ChannelInput): number {
+    return input === "functionGeneratorB" ? this.functionGenerator.phaseProperty.value : 0;
+  }
+
+  private fillChannel(channel: Channel, buffer: Float32Array, cleanBuffer: Float32Array): void {
+    const input = channel.inputProperty.value;
+    const coupling = channel.couplingProperty.value;
+
+    if (input === "none") {
+      buffer.fill(0);
+      cleanBuffer.fill(0);
+      return;
+    }
+
+    if (input === "microphone") {
+      buffer.set(this.audioScratchBuffer);
+      cleanBuffer.set(this.audioScratchBuffer);
+      this.applyCoupling(buffer, coupling, windowMean(buffer));
+      this.applyCoupling(cleanBuffer, coupling, windowMean(cleanBuffer));
+      return;
+    }
+
+    this.fillFromGenerator(buffer, cleanBuffer, this.phaseForInput(input), coupling);
+  }
+
   private fillFromGenerator(
     buffer: Float32Array,
     cleanBuffer: Float32Array,
@@ -368,8 +398,6 @@ export class OscilloscopeModel implements TModel {
     const hShift = this.horizontalPositionProperty.value * this.effectiveTimePerDivision;
     const lastIndex = Math.max(1, n - 1);
 
-    // The trigger event (t0) sits at the horizontal center of the display, as on a
-    // real bench scope, so the `-0.5` places the center column at the crossing.
     for (let i = 0; i < n; i++) {
       const t = t0 + (i / lastIndex - 0.5) * windowSeconds - hShift;
       const clean = fg.cleanVoltageAt(t, phaseDegrees);
@@ -377,22 +405,11 @@ export class OscilloscopeModel implements TModel {
       buffer[i] = clean + fg.noiseSample();
     }
 
-    // Both buffers carry the same DC component, so both take the same correction.
     const dcVolts = fg.meanVoltage;
     this.applyCoupling(buffer, coupling, dcVolts);
     this.applyCoupling(cleanBuffer, coupling, dcVolts);
   }
 
-  /**
-   * Applies AC / DC / GND coupling to a filled buffer, in place.
-   *
-   * `dcVolts` is the signal's true DC component. It is passed in rather than
-   * measured from the buffer because the mean of the *visible window* depends on
-   * how many cycles the current time/div happens to show: for a waveform that is
-   * not symmetric about the trigger point (a low-duty pulse, say) that would make
-   * the AC-coupled baseline jump every time the timebase knob moves, which no
-   * real scope does — its AC coupling is a fixed high-pass.
-   */
   private applyCoupling(buffer: Float32Array, coupling: Coupling, dcVolts: number): void {
     if (coupling === "GND") {
       buffer.fill(0);
@@ -405,24 +422,14 @@ export class OscilloscopeModel implements TModel {
     }
   }
 
-  /**
-   * Finds the time offset at which the trigger source crosses the trigger level
-   * with the selected slope, so the displayed generator waveform stands still.
-   *
-   * Returns `null` when the comparator never fires over a full period — the level
-   * is outside the signal's range, or the frequency is degenerate. Callers use
-   * that to distinguish "no trigger event" (which holds a normal/single sweep)
-   * from a genuine crossing at t = 0.
-   */
-  private computeTriggerOffset(): number | null {
-    const source = this.trigger.sourceProperty.value;
+  private computeTriggerOffset(input: ChannelInput): number | null {
     const fg = this.functionGenerator;
     const f = fg.frequencyProperty.value;
-    if (f <= 0) {
+    if (f <= 0 || !this.isGeneratorInput(input)) {
       return null;
     }
 
-    const phaseDeg = source === "ch2" ? fg.phaseProperty.value : 0;
+    const phaseDeg = this.phaseForInput(input);
     const level = this.trigger.levelProperty.value;
     const rising = this.trigger.slopeProperty.value === "rising";
     const period = 1 / f;
@@ -448,8 +455,6 @@ export class OscilloscopeModel implements TModel {
     this.ch1.reset();
     this.ch2.reset();
     this.trigger.reset();
-    // Resetting the source back to the function generator releases the mic via the link.
-    this.sourceProperty.reset();
     this.timePerDivisionProperty.reset();
     this.horizontalPositionProperty.reset();
     this.magnifyProperty.reset();
@@ -474,7 +479,6 @@ export class OscilloscopeModel implements TModel {
     this.ch1.dispose();
     this.ch2.dispose();
     this.trigger.dispose();
-    this.sourceProperty.dispose();
     this.timePerDivisionProperty.dispose();
     this.horizontalPositionProperty.dispose();
     this.magnifyProperty.dispose();

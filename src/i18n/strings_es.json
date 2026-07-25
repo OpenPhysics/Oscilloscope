@@ -16,10 +16,10 @@
     "amplitude": "Amplitud",
     "offset": "Desplaz.",
     "duty": "Ciclo",
-    "phase": "Fase CH2"
+    "phase": "Fase SAL B"
   },
   "source": {
-    "title": "Entrada CH1",
+    "title": "Micrófono",
     "functionGenerator": "Generador",
     "audio": "Micrófono",
     "status": {
@@ -30,9 +30,16 @@
       "unsupported": "Micrófono no disponible"
     }
   },
+  "patch": {
+    "outA": "SAL A",
+    "outB": "SAL B",
+    "micOut": "MIC",
+    "ch1Bnc": "CH1",
+    "ch2Bnc": "CH2"
+  },
   "vertical": {
     "title": "Vertical",
-    "voltsPerDivision": "Voltios/Div",
+    "voltsPerDivision": "Escala",
     "position": "Posición",
     "coupling": "Acoplamiento",
     "invert": "Invertir",
@@ -43,7 +50,7 @@
   },
   "horizontal": {
     "title": "Horizontal",
-    "timePerDivision": "Tiempo/Div",
+    "timePerDivision": "Escala",
     "position": "Posición",
     "magnify": "×10 Amp",
     "xyMode": "X-Y",
@@ -69,13 +76,16 @@
     "single": "Único",
     "autoset": "Autoajuste",
     "persistence": "Persist.",
-    "cursors": "Cursores",
+    "cursors": "Cursor",
+    "measure": "Medir",
+    "help": "Ayuda",
     "exportCsv": "Guardar CSV",
     "exportImage": "Guardar PNG",
-    "math": "Mate",
+    "math": "M",
     "mathOff": "No",
     "mathAdd": "CH1 + CH2",
-    "mathSubtract": "CH1 − CH2"
+    "mathSubtract": "CH1 − CH2",
+    "fft": "F"
   },
   "measurements": {
     "title": "Medir",
@@ -93,22 +103,22 @@
   "a11y": {
     "screenSummary": {
       "playArea": "El área de juego es una pantalla de osciloscopio con una retícula sobre la que se dibujan una o dos trazas luminosas, con una línea de nivel de disparo ajustable.",
-      "controlArea": "El área de control tiene mandos e interruptores de panel: un generador de funciones, controles verticales por canal, base de tiempo horizontal, controles de disparo y botones de adquisición para marcha/paro, único y autoajuste.",
-      "interactionHint": "Gira los controles del generador, verticales, horizontales y de disparo y observa las trazas, o cambia CH1 al micrófono."
+      "controlArea": "El área de control tiene un panel estilo Tektronix con mandos verticales, horizontales y de disparo, botones Cursor, Medir, Ayuda, Marcha/Paro, Único y Autoajuste, botones Mate y FFT, entradas BNC y un generador de funciones con cables de conexión.",
+      "interactionHint": "Conecta un cable del generador o del micrófono a un BNC de canal, luego ajusta los controles de panel y observa las trazas."
     },
     "currentDetails": {
-      "functionGenerator": "CH1 muestra una onda {{waveform}} a {{frequency}} hercios con amplitud {{amplitude}} voltios.",
-      "audioActive": "CH1 muestra la señal en vivo del micrófono.",
-      "audioInactive": "La fuente de micrófono está seleccionada pero aún no hay señal en vivo disponible."
+      "functionGenerator": "El canal {{channel}} muestra una onda {{waveform}} a {{frequency}} hercios con amplitud {{amplitude}} voltios.",
+      "audioActive": "Un canal muestra la señal en vivo del micrófono.",
+      "audioInactive": "El micrófono está conectado pero aún no hay señal en vivo disponible.",
+      "unconnected": "El canal {{channel}} no tiene cable conectado a su BNC."
     },
     "controls": {
-      "source": "Fuente de entrada de CH1",
       "waveform": "Forma de onda del generador",
       "frequency": "Frecuencia del generador",
       "amplitude": "Amplitud del generador",
       "offset": "Desplazamiento de CC del generador",
       "duty": "Ciclo de trabajo del generador",
-      "phase": "Fase del canal 2",
+      "phase": "Fase de la salida B del generador",
       "ch1VoltsPerDivision": "Voltios por división del canal 1",
       "ch2VoltsPerDivision": "Voltios por división del canal 2",
       "ch1Position": "Posición vertical del canal 1",
@@ -123,8 +133,10 @@
       "horizontalPosition": "Posición horizontal",
       "magnify": "Amplificador horizontal diez veces",
       "xyMode": "Modo de pantalla X-Y",
-      "fft": "Modo de pantalla de espectro FFT",
+      "fft": "Pantalla de espectro FFT",
       "cursors": "Alternar los cursores de medición",
+      "measure": "Alternar las mediciones en pantalla",
+      "help": "Abrir la ayuda de teclado",
       "cursorTime1": "Cursor de tiempo 1",
       "cursorTime2": "Cursor de tiempo 2",
       "cursorVolt1": "Cursor de voltaje 1",
@@ -139,7 +151,13 @@
       "single": "Captura de disparo único",
       "autoset": "Autoajustar la pantalla a la señal",
       "persistence": "Persistencia de la forma de onda",
-      "math": "Canal matemático"
+      "math": "Canal matemático",
+      "fgOutA": "Salida A del generador de funciones",
+      "fgOutB": "Salida B del generador de funciones",
+      "micOut": "Salida del micrófono",
+      "ch1Bnc": "Entrada BNC del canal 1",
+      "ch2Bnc": "Entrada BNC del canal 2",
+      "patchHelp": "Activa para conectar o desconectar. Arrastra desde una toma de fuente hasta un BNC de canal para conectar un cable."
     }
   },
   "preferences": {

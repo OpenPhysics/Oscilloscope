@@ -1,8 +1,8 @@
 /**
  * HorizontalControlPanel.ts
  *
- * The horizontal (timebase) section: a time/div rotary switch, a horizontal
- * position knob, a ×10 magnifier button, and an X-Y mode button.
+ * TBS-style horizontal section: Position and Scale (time/div), ×10 magnifier,
+ * and X-Y as a secondary mode button. FFT lives with Vertical (Math/F).
  */
 
 import { DerivedProperty } from "scenerystack/axon";
@@ -19,7 +19,7 @@ import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
 import { derivedString, numberItems } from "./controlHelpers.js";
 import { formatDivisions, formatTimePerDiv } from "./formatUnits.js";
 
-const HEADING_FONT = new PhetFont({ size: 15, weight: "bold" });
+const HEADING_FONT = new PhetFont({ size: 13, weight: "bold" });
 
 export class HorizontalControlPanel extends SimPanel {
   public readonly controlsInOrder: Node[];
@@ -29,22 +29,22 @@ export class HorizontalControlPanel extends SimPanel {
     const h = strings.getHorizontal();
     const a11y = strings.getA11yStrings().controls;
 
-    const timeSwitch = new RotarySwitch(
-      model.timePerDivisionProperty,
-      numberItems(SCOPE_TIME_PER_DIV_STEPS, formatTimePerDiv),
-      {
-        radius: 24,
-        captionStringProperty: h.timePerDivisionStringProperty,
-        accessibleName: a11y.timePerDivisionStringProperty,
-      },
-    );
-
     const positionKnob = new RotaryKnob(model.horizontalPositionProperty, SCOPE_HORIZONTAL_POSITION_RANGE, {
-      radius: 20,
+      radius: 18,
       captionStringProperty: h.positionStringProperty,
       valueStringProperty: derivedString(model.horizontalPositionProperty, formatDivisions),
       accessibleName: a11y.horizontalPositionStringProperty,
     });
+
+    const timeSwitch = new RotarySwitch(
+      model.timePerDivisionProperty,
+      numberItems(SCOPE_TIME_PER_DIV_STEPS, formatTimePerDiv),
+      {
+        radius: 22,
+        captionStringProperty: h.timePerDivisionStringProperty,
+        accessibleName: a11y.timePerDivisionStringProperty,
+      },
+    );
 
     const magButton = new PanelButton({
       labelStringProperty: h.magnifyStringProperty,
@@ -54,6 +54,7 @@ export class HorizontalControlPanel extends SimPanel {
         model.magnifyProperty.value = !model.magnifyProperty.value;
       },
       minWidth: 66,
+      fontSize: 11,
     });
 
     const xyButton = new PanelButton({
@@ -64,30 +65,21 @@ export class HorizontalControlPanel extends SimPanel {
         model.displayModeProperty.value = model.displayModeProperty.value === "xy" ? "yt" : "xy";
       },
       minWidth: 66,
-    });
-
-    const fftButton = new PanelButton({
-      labelStringProperty: h.fftStringProperty,
-      indicatorProperty: new DerivedProperty([model.displayModeProperty], (m) => m === "fft"),
-      accessibleName: a11y.fftStringProperty,
-      listener: () => {
-        model.displayModeProperty.value = model.displayModeProperty.value === "fft" ? "yt" : "fft";
-      },
-      minWidth: 66,
+      fontSize: 11,
     });
 
     const content = new VBox({
       align: "left",
-      spacing: 10,
+      spacing: 8,
       children: [
         new Text(h.titleStringProperty, { font: HEADING_FONT, fill: OscilloscopeColors.textColorProperty }),
-        new HBox({ spacing: 14, align: "top", children: [timeSwitch, positionKnob] }),
-        new VBox({ spacing: 8, align: "center", children: [magButton, xyButton, fftButton] }),
+        new HBox({ spacing: 12, align: "top", children: [positionKnob, timeSwitch] }),
+        new HBox({ spacing: 8, children: [magButton, xyButton] }),
       ],
     });
 
-    super(content);
+    super(content, { xMargin: 10, yMargin: 8 });
 
-    this.controlsInOrder = [timeSwitch, positionKnob, magButton, xyButton, fftButton];
+    this.controlsInOrder = [positionKnob, timeSwitch, magButton, xyButton];
   }
 }

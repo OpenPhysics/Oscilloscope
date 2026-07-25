@@ -9,6 +9,7 @@
  *   - vertical position (offset, in divisions)
  *   - AC / DC / GND coupling
  *   - invert
+ *   - BNC input patch (none / FG A / FG B / microphone)
  *
  * The channel is a pure data holder — the model samples a source into it and the
  * view reads these Properties to scale and place the trace.
@@ -17,6 +18,7 @@
 import { BooleanProperty, NumberProperty, StringUnionProperty } from "scenerystack/axon";
 import OscilloscopeNamespace from "../../OscilloscopeNamespace.js";
 import { SCOPE_POSITION_RANGE, SCOPE_VOLTS_PER_DIV_RANGE } from "../../SimConstants.js";
+import { CHANNEL_INPUTS, type ChannelInput } from "./ChannelInput.js";
 import { COUPLINGS, type Coupling } from "./Coupling.js";
 
 export type ChannelOptions = {
@@ -26,6 +28,8 @@ export type ChannelOptions = {
   readonly initiallyEnabled: boolean;
   /** Initial vertical sensitivity, in volts per division. */
   readonly initialVoltsPerDivision: number;
+  /** What is patched into this channel's BNC on power-up. */
+  readonly initialInput?: ChannelInput;
 };
 
 export class Channel {
@@ -49,12 +53,18 @@ export class Channel {
   /** Whether the trace is inverted (multiplied by -1). */
   public readonly invertedProperty = new BooleanProperty(false);
 
+  /** What is patched into this channel's BNC jack. */
+  public readonly inputProperty: StringUnionProperty<ChannelInput>;
+
   public constructor(options: ChannelOptions) {
     this.index = options.index;
     this.enabledProperty = new BooleanProperty(options.initiallyEnabled);
     this.voltsPerDivisionProperty = new NumberProperty(options.initialVoltsPerDivision, {
       range: SCOPE_VOLTS_PER_DIV_RANGE,
       units: "V",
+    });
+    this.inputProperty = new StringUnionProperty<ChannelInput>(options.initialInput ?? "none", {
+      validValues: [...CHANNEL_INPUTS],
     });
   }
 
@@ -69,6 +79,7 @@ export class Channel {
     this.positionProperty.reset();
     this.couplingProperty.reset();
     this.invertedProperty.reset();
+    this.inputProperty.reset();
   }
 
   public dispose(): void {
@@ -77,6 +88,7 @@ export class Channel {
     this.positionProperty.dispose();
     this.couplingProperty.dispose();
     this.invertedProperty.dispose();
+    this.inputProperty.dispose();
   }
 }
 

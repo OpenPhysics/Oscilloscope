@@ -16,10 +16,10 @@
     "amplitude": "Amplitude",
     "offset": "Décalage",
     "duty": "Rapport",
-    "phase": "Phase CH2"
+    "phase": "Phase SORT B"
   },
   "source": {
-    "title": "Entrée CH1",
+    "title": "Microphone",
     "functionGenerator": "Générateur",
     "audio": "Microphone",
     "status": {
@@ -30,9 +30,16 @@
       "unsupported": "Microphone non disponible"
     }
   },
+  "patch": {
+    "outA": "SORT A",
+    "outB": "SORT B",
+    "micOut": "MIC",
+    "ch1Bnc": "CH1",
+    "ch2Bnc": "CH2"
+  },
   "vertical": {
     "title": "Vertical",
-    "voltsPerDivision": "Volts/Div",
+    "voltsPerDivision": "Échelle",
     "position": "Position",
     "coupling": "Couplage",
     "invert": "Inverser",
@@ -43,7 +50,7 @@
   },
   "horizontal": {
     "title": "Horizontal",
-    "timePerDivision": "Temps/Div",
+    "timePerDivision": "Échelle",
     "position": "Position",
     "magnify": "×10 Amp",
     "xyMode": "X-Y",
@@ -69,13 +76,16 @@
     "single": "Unique",
     "autoset": "Auto-réglage",
     "persistence": "Persist.",
-    "cursors": "Curseurs",
+    "cursors": "Curseur",
+    "measure": "Mesurer",
+    "help": "Aide",
     "exportCsv": "Enreg. CSV",
     "exportImage": "Enreg. PNG",
-    "math": "Math",
+    "math": "M",
     "mathOff": "Non",
     "mathAdd": "CH1 + CH2",
-    "mathSubtract": "CH1 − CH2"
+    "mathSubtract": "CH1 − CH2",
+    "fft": "F"
   },
   "measurements": {
     "title": "Mesurer",
@@ -93,22 +103,22 @@
   "a11y": {
     "screenSummary": {
       "playArea": "La zone de jeu est un écran d'oscilloscope avec une graticule sur laquelle une ou deux traces lumineuses sont tracées, avec une ligne de niveau de déclenchement réglable.",
-      "controlArea": "La zone de commande comporte des boutons et interrupteurs de façade : un générateur de fonctions, des commandes verticales par voie, une base de temps horizontale, des commandes de déclenchement et des boutons d'acquisition marche/arrêt, unique et auto-réglage.",
-      "interactionHint": "Tournez les commandes du générateur, verticales, horizontales et de déclenchement et observez les traces, ou basculez CH1 sur le microphone."
+      "controlArea": "La zone de commande a une façade style Tektronix avec des boutons verticaux, horizontaux et de déclenchement, Curseur, Mesurer, Aide, Marche/Arrêt, Unique et Auto-réglage, boutons Math et FFT, entrées BNC et un générateur de fonctions avec câbles de raccordement.",
+      "interactionHint": "Raccordez un câble du générateur ou du microphone à une entrée BNC, puis réglez les commandes de façade et observez les traces."
     },
     "currentDetails": {
-      "functionGenerator": "CH1 affiche une onde {{waveform}} à {{frequency}} hertz avec une amplitude de {{amplitude}} volts.",
-      "audioActive": "CH1 affiche le signal en direct du microphone.",
-      "audioInactive": "La source microphone est sélectionnée mais aucun signal en direct n'est encore disponible."
+      "functionGenerator": "La voie {{channel}} affiche une onde {{waveform}} à {{frequency}} hertz avec une amplitude de {{amplitude}} volts.",
+      "audioActive": "Une voie affiche le signal en direct du microphone.",
+      "audioInactive": "Le microphone est raccordé mais aucun signal en direct n'est encore disponible.",
+      "unconnected": "La voie {{channel}} n'a pas de câble connecté à son BNC."
     },
     "controls": {
-      "source": "Source d'entrée de CH1",
       "waveform": "Forme d'onde du générateur",
       "frequency": "Fréquence du générateur",
       "amplitude": "Amplitude du générateur",
       "offset": "Décalage continu du générateur",
       "duty": "Rapport cyclique du générateur",
-      "phase": "Phase de la voie 2",
+      "phase": "Phase de la sortie B du générateur",
       "ch1VoltsPerDivision": "Volts par division de la voie 1",
       "ch2VoltsPerDivision": "Volts par division de la voie 2",
       "ch1Position": "Position verticale de la voie 1",
@@ -123,8 +133,10 @@
       "horizontalPosition": "Position horizontale",
       "magnify": "Amplificateur horizontal dix fois",
       "xyMode": "Mode d'affichage X-Y",
-      "fft": "Mode d'affichage du spectre FFT",
+      "fft": "Affichage du spectre FFT",
       "cursors": "Activer les curseurs de mesure",
+      "measure": "Activer les mesures à l'écran",
+      "help": "Ouvrir l'aide clavier",
       "cursorTime1": "Curseur de temps 1",
       "cursorTime2": "Curseur de temps 2",
       "cursorVolt1": "Curseur de tension 1",
@@ -139,7 +151,13 @@
       "single": "Capture à déclenchement unique",
       "autoset": "Auto-régler l'affichage sur le signal",
       "persistence": "Persistance de la forme d'onde",
-      "math": "Voie mathématique"
+      "math": "Voie mathématique",
+      "fgOutA": "Sortie A du générateur de fonctions",
+      "fgOutB": "Sortie B du générateur de fonctions",
+      "micOut": "Sortie du microphone",
+      "ch1Bnc": "Entrée BNC de la voie 1",
+      "ch2Bnc": "Entrée BNC de la voie 2",
+      "patchHelp": "Activez pour connecter ou déconnecter. Faites glisser depuis une prise source vers un BNC de voie pour raccorder un câble."
     }
   },
   "preferences": {

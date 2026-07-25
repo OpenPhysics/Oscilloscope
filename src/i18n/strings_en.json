@@ -16,10 +16,10 @@
     "amplitude": "Amplitude",
     "offset": "Offset",
     "duty": "Duty",
-    "phase": "CH2 Phase"
+    "phase": "OUT B Phase"
   },
   "source": {
-    "title": "CH1 Input",
+    "title": "Microphone",
     "functionGenerator": "Generator",
     "audio": "Microphone",
     "status": {
@@ -30,9 +30,16 @@
       "unsupported": "Microphone not available"
     }
   },
+  "patch": {
+    "outA": "OUT A",
+    "outB": "OUT B",
+    "micOut": "MIC",
+    "ch1Bnc": "CH1",
+    "ch2Bnc": "CH2"
+  },
   "vertical": {
     "title": "Vertical",
-    "voltsPerDivision": "Volts/Div",
+    "voltsPerDivision": "Scale",
     "position": "Position",
     "coupling": "Coupling",
     "invert": "Invert",
@@ -43,7 +50,7 @@
   },
   "horizontal": {
     "title": "Horizontal",
-    "timePerDivision": "Time/Div",
+    "timePerDivision": "Scale",
     "position": "Position",
     "magnify": "×10 Mag",
     "xyMode": "X-Y",
@@ -69,13 +76,16 @@
     "single": "Single",
     "autoset": "Autoset",
     "persistence": "Persist",
-    "cursors": "Cursors",
+    "cursors": "Cursor",
+    "measure": "Measure",
+    "help": "Help",
     "exportCsv": "Save CSV",
     "exportImage": "Save PNG",
-    "math": "Math",
+    "math": "M",
     "mathOff": "Off",
     "mathAdd": "CH1 + CH2",
-    "mathSubtract": "CH1 − CH2"
+    "mathSubtract": "CH1 − CH2",
+    "fft": "F"
   },
   "measurements": {
     "title": "Measure",
@@ -93,22 +103,22 @@
   "a11y": {
     "screenSummary": {
       "playArea": "The play area is an oscilloscope screen with a graticule grid on which one or two glowing waveform traces are drawn, with an adjustable trigger-level line.",
-      "controlArea": "The control area has front-panel knobs and switches: a function generator, per-channel vertical controls, horizontal timebase, trigger controls, and acquisition buttons for run/stop, single, and autoset.",
-      "interactionHint": "Turn the generator, vertical, horizontal, and trigger controls and watch the traces respond, or switch CH1 to the microphone."
+      "controlArea": "The control area has a Tektronix-style front panel with vertical, horizontal, and trigger knobs, Cursor, Measure, Help, Run/Stop, Single, and Autoset buttons, Math and FFT buttons, BNC inputs, and a function generator with patch cables.",
+      "interactionHint": "Patch a cable from the function generator or microphone into a channel BNC, then adjust the front-panel controls and watch the traces respond."
     },
     "currentDetails": {
-      "functionGenerator": "CH1 shows a {{waveform}} wave at {{frequency}} hertz with amplitude {{amplitude}} volts.",
-      "audioActive": "CH1 shows the live microphone signal.",
-      "audioInactive": "The microphone source is selected but no live signal is available yet."
+      "functionGenerator": "Channel {{channel}} shows a {{waveform}} wave at {{frequency}} hertz with amplitude {{amplitude}} volts.",
+      "audioActive": "A channel shows the live microphone signal.",
+      "audioInactive": "The microphone is patched but no live signal is available yet.",
+      "unconnected": "Channel {{channel}} has no cable connected to its BNC."
     },
     "controls": {
-      "source": "CH1 input source",
       "waveform": "Generator waveform",
       "frequency": "Generator frequency",
       "amplitude": "Generator amplitude",
       "offset": "Generator DC offset",
       "duty": "Generator duty cycle",
-      "phase": "Channel 2 phase",
+      "phase": "Function generator OUT B phase",
       "ch1VoltsPerDivision": "Channel 1 volts per division",
       "ch2VoltsPerDivision": "Channel 2 volts per division",
       "ch1Position": "Channel 1 vertical position",
@@ -123,8 +133,10 @@
       "horizontalPosition": "Horizontal position",
       "magnify": "Ten times horizontal magnifier",
       "xyMode": "X-Y display mode",
-      "fft": "FFT spectrum display mode",
+      "fft": "FFT spectrum display",
       "cursors": "Toggle measurement cursors",
+      "measure": "Toggle on-screen measurements",
+      "help": "Open keyboard help",
       "cursorTime1": "Time cursor 1",
       "cursorTime2": "Time cursor 2",
       "cursorVolt1": "Voltage cursor 1",
@@ -139,7 +151,13 @@
       "single": "Single-shot capture",
       "autoset": "Autoset the display to the signal",
       "persistence": "Waveform persistence",
-      "math": "Math channel"
+      "math": "Math channel",
+      "fgOutA": "Function generator output A",
+      "fgOutB": "Function generator output B",
+      "micOut": "Microphone output",
+      "ch1Bnc": "Channel 1 BNC input",
+      "ch2Bnc": "Channel 2 BNC input",
+      "patchHelp": "Activate to connect or disconnect. Drag from a source jack onto a channel BNC to patch a cable."
     }
   },
   "preferences": {

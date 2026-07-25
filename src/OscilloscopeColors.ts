@@ -214,6 +214,72 @@ const OscilloscopeColors = {
     default: "#333a44",
     projector: "#b0b4bb",
   }),
+
+  // ── Function generator module ────────────────────────────────────────────────
+  // Deliberately distinct from the navy scope front-panel chrome so the signal
+  // source reads as a separate instrument (sliders / combo boxes, not knobs).
+
+  /** Fill of the function-generator panel. */
+  generatorPanelBackgroundColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "generatorPanelBackground", {
+    default: "#1a2a22",
+    projector: "#e7f0ea",
+  }),
+
+  /** Border of the function-generator panel. */
+  generatorPanelBorderColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "generatorPanelBorder", {
+    default: "#3d6b52",
+    projector: "#6a8f78",
+  }),
+
+  /** Accent used for the generator title and slider thumbs. */
+  generatorAccentColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "generatorAccent", {
+    default: "#e0a045",
+    projector: "#8a5a12",
+  }),
+
+  /** Highlighted slider-thumb fill while dragging / hovering. */
+  generatorAccentHighlightColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "generatorAccentHighlight", {
+    default: "#f0c06a",
+    projector: "#b87a20",
+  }),
+
+  /** Enabled slider-track fill on the generator panel. */
+  generatorSliderTrackColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "generatorSliderTrack", {
+    default: "#2f4538",
+    projector: "#c5d6cb",
+  }),
+
+  // ── BNC jacks / patch cables ─────────────────────────────────────────────────
+
+  /** Outer ring of a free BNC jack. */
+  bncJackColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "bncJack", {
+    default: "#8a9099",
+    projector: "#6a7078",
+  }),
+
+  /** Outer ring of an occupied BNC jack. */
+  bncJackConnectedColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "bncJackConnected", {
+    default: "#c5cad3",
+    projector: "#3a4048",
+  }),
+
+  /** Patch-cable color for function-generator output A. */
+  wireFgAColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "wireFgA", {
+    default: "#ffd24d",
+    projector: "#c9a020",
+  }),
+
+  /** Patch-cable color for function-generator output B. */
+  wireFgBColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "wireFgB", {
+    default: "#4dd0ff",
+    projector: "#1a8ab0",
+  }),
+
+  /** Patch-cable color for the microphone output. */
+  wireMicColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "wireMic", {
+    default: "#d18cff",
+    projector: "#8a4cb8",
+  }),
 };
 
 export default OscilloscopeColors;

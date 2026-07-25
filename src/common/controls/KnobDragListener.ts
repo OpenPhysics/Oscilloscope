@@ -1,38 +1,84 @@
 /**
  * KnobDragListener.ts
  *
- * The pointer behavior for a {@link RotaryKnob}: a "scrub" drag. Rather than map
- * the pointer's absolute angle to the value (which jumps when the pointer crosses
- * the knob's dead zone), it accumulates the drag motion — up / right increases,
- * down / left decreases — and steps the value smoothly. This feels like turning a
- * real knob and never snaps.
+ * The pointer behavior for a {@link RotaryKnob}: relative angular drag. The
+ * pointer's motion around the dial centre advances the value — the same gesture
+ * you use on a physical knob — so circular turning feels natural. Absolute-angle
+ * mapping is avoided on purpose: it would jump whenever the pointer crossed the
+ * 270° sweep's dead zone. Relative deltas never snap.
  */
 
 import type { TProperty } from "scenerystack/axon";
 import type { Range } from "scenerystack/dot";
-import { DragListener } from "scenerystack/scenery";
+import { Vector2 } from "scenerystack/dot";
+import { DragListener, type Node } from "scenerystack/scenery";
 
-/** Pixels of drag motion that sweep the control across its full range. */
-const FULL_SCALE_PIXELS = 220;
+/**
+ * Visual sweep of the knob pointer, in radians. Must stay in sync with the
+ * indicator arc drawn by {@link RotaryKnob} / {@link RotarySwitch} (270°).
+ */
+export const KNOB_SWEEP_RADIANS = (270 * Math.PI) / 180;
+
+/** Ignore angle samples this close to the dial centre (atan2 is unstable there). */
+const MIN_DRAG_RADIUS = 6;
+
+/**
+ * Angle of `point` about `center`, in radians: 0 at 12 o'clock, increasing
+ * clockwise (matches the knob indicator's rotation convention).
+ */
+export function knobAngleFromCenter(center: Vector2, point: Vector2): number {
+  return Math.atan2(point.x - center.x, center.y - point.y);
+}
+
+/**
+ * Smallest signed turn from `from` to `to`, in (−π, π]. Unwraps the ±π
+ * discontinuity of {@link knobAngleFromCenter}.
+ */
+export function unwrapAngleDelta(from: number, to: number): number {
+  let delta = to - from;
+  if (delta > Math.PI) {
+    delta -= 2 * Math.PI;
+  } else if (delta < -Math.PI) {
+    delta += 2 * Math.PI;
+  }
+  return delta;
+}
 
 export class KnobDragListener extends DragListener {
-  public constructor(valueProperty: TProperty<number>, range: Range) {
-    const perPixel = range.getLength() / FULL_SCALE_PIXELS;
-    let prevX = 0;
-    let prevY = 0;
+  public constructor(valueProperty: TProperty<number>, range: Range, dial: Node) {
+    const perRadian = range.getLength() / KNOB_SWEEP_RADIANS;
+    let prevAngle = 0;
+    let hasAngle = false;
+
+    const centerOf = (): Vector2 => dial.localToGlobalPoint(new Vector2(0, 0));
 
     super({
       start: (event) => {
-        prevX = event.pointer.point.x;
-        prevY = event.pointer.point.y;
+        const center = centerOf();
+        const point = event.pointer.point;
+        if (point.distance(center) < MIN_DRAG_RADIUS) {
+          hasAngle = false;
+          return;
+        }
+        prevAngle = knobAngleFromCenter(center, point);
+        hasAngle = true;
       },
       drag: (event) => {
-        const { x, y } = event.pointer.point;
-        // Drag up (−y) or right (+x) increases the value.
-        const deltaPixels = x - prevX - (y - prevY);
-        prevX = x;
-        prevY = y;
-        const next = valueProperty.value + deltaPixels * perPixel;
+        const center = centerOf();
+        const point = event.pointer.point;
+        if (point.distance(center) < MIN_DRAG_RADIUS) {
+          hasAngle = false;
+          return;
+        }
+        const angle = knobAngleFromCenter(center, point);
+        if (!hasAngle) {
+          prevAngle = angle;
+          hasAngle = true;
+          return;
+        }
+        const delta = unwrapAngleDelta(prevAngle, angle);
+        prevAngle = angle;
+        const next = valueProperty.value + delta * perRadian;
         valueProperty.value = Math.max(range.min, Math.min(range.max, next));
       },
     });

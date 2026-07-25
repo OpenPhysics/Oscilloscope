@@ -9,7 +9,26 @@
 import { DerivedProperty, PatternStringProperty } from "scenerystack/axon";
 import { ScreenSummaryContent } from "scenerystack/sim";
 import { StringManager } from "../../i18n/StringManager.js";
+import type { ChannelInput } from "../model/ChannelInput.js";
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
+
+function describeChannelInput(
+  input: ChannelInput,
+  channel: 1 | 2,
+  fgDetails: string,
+  audioActive: string,
+  audioInactive: string,
+  unconnectedPattern: (channel: number) => string,
+  micActive: boolean,
+): string {
+  if (input === "none") {
+    return unconnectedPattern(channel);
+  }
+  if (input === "microphone") {
+    return micActive ? audioActive : audioInactive;
+  }
+  return fgDetails.replace("{{channel}}", String(channel));
+}
 
 export class OscilloscopeScreenSummaryContent extends ScreenSummaryContent {
   public constructor(model: OscilloscopeModel) {
@@ -19,7 +38,6 @@ export class OscilloscopeScreenSummaryContent extends ScreenSummaryContent {
     const details = a11y.currentDetails;
     const fg = model.functionGenerator;
 
-    // Localized waveform name that tracks the selected waveform.
     const waveformNameProperty = new DerivedProperty(
       [
         fg.waveformProperty,
@@ -36,36 +54,55 @@ export class OscilloscopeScreenSummaryContent extends ScreenSummaryContent {
       },
     );
 
-    // Sentence describing the function-generator source, with live values.
-    //
-    // `decimalPlaces` is required: it defaults to null, which formats the raw
-    // number. The knobs are continuous, so a dragged frequency is a value like
-    // 1018.1409090909092 — fine for the model, but a screen reader would read
-    // every digit aloud. The visible readouts round via formatUnits; these match.
     const functionGeneratorDetails = new PatternStringProperty(
       details.functionGeneratorStringProperty,
       {
+        channel: new DerivedProperty([model.ch1.inputProperty, model.ch2.inputProperty], (a, b) => {
+          if (a === "functionGeneratorA" || a === "functionGeneratorB") {
+            return 1;
+          }
+          if (b === "functionGeneratorA" || b === "functionGeneratorB") {
+            return 2;
+          }
+          return 1;
+        }),
         waveform: waveformNameProperty,
         frequency: fg.frequencyProperty,
         amplitude: fg.amplitudeProperty,
       },
-      { decimalPlaces: { waveform: null, frequency: 0, amplitude: 2 } },
+      { decimalPlaces: { channel: 0, waveform: null, frequency: 0, amplitude: 2 } },
     );
 
-    // Switch between the function-generator sentence and the microphone sentences.
+    const unconnectedCh1 = new PatternStringProperty(
+      details.unconnectedStringProperty,
+      { channel: 1 },
+      { decimalPlaces: { channel: 0 } },
+    );
+    const unconnectedCh2 = new PatternStringProperty(
+      details.unconnectedStringProperty,
+      { channel: 2 },
+      { decimalPlaces: { channel: 0 } },
+    );
+
     const currentDetailsProperty = new DerivedProperty(
       [
-        model.sourceProperty,
+        model.ch1.inputProperty,
+        model.ch2.inputProperty,
         model.audioInput.statusProperty,
         functionGeneratorDetails,
         details.audioActiveStringProperty,
         details.audioInactiveStringProperty,
+        unconnectedCh1,
+        unconnectedCh2,
       ],
-      (source, status, fgDetails, audioActive, audioInactive) => {
-        if (source === "functionGenerator") {
-          return fgDetails;
+      (ch1In, ch2In, status, fgDetails, audioActive, audioInactive, unc1, unc2) => {
+        const micActive = status === "active";
+        const parts: string[] = [];
+        parts.push(describeChannelInput(ch1In, 1, fgDetails, audioActive, audioInactive, () => unc1, micActive));
+        if (ch2In !== "none" || model.ch2.enabledProperty.value) {
+          parts.push(describeChannelInput(ch2In, 2, fgDetails, audioActive, audioInactive, () => unc2, micActive));
         }
-        return status === "active" ? audioActive : audioInactive;
+        return parts.join(" ");
       },
     );
 

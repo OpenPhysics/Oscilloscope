@@ -94,6 +94,11 @@ export class StringManager {
     return stringProperties.source;
   }
 
+  /** BNC / patch-cable jack labels. */
+  public getPatch() {
+    return stringProperties.patch;
+  }
+
   /** Per-channel vertical control labels (volts/div, position, coupling, …). */
   public getVertical() {
     return stringProperties.vertical;

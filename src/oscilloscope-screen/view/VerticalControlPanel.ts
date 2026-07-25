@@ -1,13 +1,12 @@
 /**
  * VerticalControlPanel.ts
  *
- * The vertical section of the front panel, one column per channel (CH1, CH2).
- * Each column carries the classic per-channel controls as hardware widgets: a
- * volts/div rotary switch, a vertical-position knob, an AC/DC/GND coupling
- * switch, an Invert button, and a color-coded on/off button.
+ * TBS-style vertical section: per-channel Position / Menu / Scale, coupling and
+ * invert under each column, then Math and FFT buttons, with CH1/CH2 BNC jacks
+ * along the bottom.
  */
 
-import type { TReadOnlyProperty } from "scenerystack/axon";
+import { DerivedProperty, type TReadOnlyProperty } from "scenerystack/axon";
 import { HBox, type Node, Text, type TPaint, VBox } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
 import { PanelButton } from "../../common/controls/PanelButton.js";
@@ -19,12 +18,12 @@ import OscilloscopeColors from "../../OscilloscopeColors.js";
 import { SCOPE_POSITION_RANGE, SCOPE_VOLTS_PER_DIV_STEPS } from "../../SimConstants.js";
 import type { Channel } from "../model/Channel.js";
 import { COUPLINGS } from "../model/Coupling.js";
-import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
+import { MATH_MODES, type OscilloscopeModel } from "../model/OscilloscopeModel.js";
 import { derivedString, numberItems, unionItems } from "./controlHelpers.js";
 import { formatDivisions, formatVoltsPerDiv } from "./formatUnits.js";
 
-const HEADING_FONT = new PhetFont({ size: 15, weight: "bold" });
-const CHANNEL_FONT = new PhetFont({ size: 14, weight: "bold" });
+const HEADING_FONT = new PhetFont({ size: 13, weight: "bold" });
+const CHANNEL_FONT = new PhetFont({ size: 13, weight: "bold" });
 
 type ChannelA11y = {
   voltsPerDivision: TReadOnlyProperty<string>;
@@ -34,14 +33,21 @@ type ChannelA11y = {
   enabled: TReadOnlyProperty<string>;
 };
 
+export type VerticalControlPanelOptions = {
+  /** CH1 BNC jack node (owned by the patch layer). */
+  ch1Bnc: Node;
+  /** CH2 BNC jack node (owned by the patch layer). */
+  ch2Bnc: Node;
+};
+
 export class VerticalControlPanel extends SimPanel {
-  /** Every interactive control, in reading order, for pdomOrder. */
   public readonly controlsInOrder: Node[] = [];
 
-  public constructor(model: OscilloscopeModel) {
+  public constructor(model: OscilloscopeModel, options: VerticalControlPanelOptions) {
     const strings = StringManager.getInstance();
     const v = strings.getVertical();
     const trig = strings.getTrigger();
+    const acq = strings.getAcquisition();
     const a11y = strings.getA11yStrings().controls;
 
     const column1 = new VerticalControlPanelColumn(
@@ -69,22 +75,75 @@ export class VerticalControlPanel extends SimPanel {
       },
     );
 
+    const mathLabelProperty = new DerivedProperty(
+      [
+        model.mathModeProperty,
+        acq.mathStringProperty,
+        acq.mathOffStringProperty,
+        acq.mathAddStringProperty,
+        acq.mathSubtractStringProperty,
+      ],
+      (mode, math, off, add, subtract) => {
+        if (mode === "add") {
+          return `${math}: ${add}`;
+        }
+        if (mode === "subtract") {
+          return `${math}: ${subtract}`;
+        }
+        return `${math}: ${off}`;
+      },
+    );
+    const mathButton = new PanelButton({
+      labelStringProperty: mathLabelProperty,
+      indicatorProperty: new DerivedProperty([model.mathModeProperty], (mode) => mode !== "off"),
+      indicatorColor: OscilloscopeColors.mathTraceColorProperty,
+      accessibleName: a11y.mathStringProperty,
+      listener: () => {
+        const i = MATH_MODES.indexOf(model.mathModeProperty.value);
+        const next = MATH_MODES[(i + 1) % MATH_MODES.length];
+        if (next !== undefined) {
+          model.mathModeProperty.value = next;
+        }
+      },
+      minWidth: 88,
+      fontSize: 11,
+    });
+
+    const fftButton = new PanelButton({
+      labelStringProperty: acq.fftStringProperty,
+      indicatorProperty: new DerivedProperty([model.displayModeProperty], (m) => m === "fft"),
+      accessibleName: a11y.fftStringProperty,
+      listener: () => {
+        model.displayModeProperty.value = model.displayModeProperty.value === "fft" ? "yt" : "fft";
+      },
+      minWidth: 44,
+    });
+
     const content = new VBox({
-      align: "left",
-      spacing: 10,
+      align: "center",
+      spacing: 8,
       children: [
         new Text(v.titleStringProperty, { font: HEADING_FONT, fill: OscilloscopeColors.textColorProperty }),
-        new HBox({ spacing: 18, align: "top", children: [column1, column2] }),
+        new HBox({ spacing: 16, align: "top", children: [column1, column2] }),
+        new HBox({ spacing: 8, children: [mathButton, fftButton] }),
+        new HBox({ spacing: 28, align: "top", children: [options.ch1Bnc, options.ch2Bnc] }),
       ],
     });
 
-    super(content);
+    super(content, { xMargin: 10, yMargin: 8 });
 
-    this.controlsInOrder.push(...column1.order, ...column2.order);
+    this.controlsInOrder.push(
+      ...column1.order,
+      ...column2.order,
+      mathButton,
+      fftButton,
+      options.ch1Bnc,
+      options.ch2Bnc,
+    );
   }
 }
 
-/** One channel's column of vertical controls. */
+/** One channel's TBS-style column: Position, Menu (1/2), Scale, coupling, invert. */
 class VerticalControlPanelColumn extends VBox {
   public readonly order: Node[];
 
@@ -97,7 +156,14 @@ class VerticalControlPanelColumn extends VBox {
     const strings = StringManager.getInstance();
     const v = strings.getVertical();
 
-    const onButton = new PanelButton({
+    const positionKnob = new RotaryKnob(channel.positionProperty, SCOPE_POSITION_RANGE, {
+      radius: 18,
+      captionStringProperty: v.positionStringProperty,
+      valueStringProperty: derivedString(channel.positionProperty, formatDivisions),
+      accessibleName: a11y.position,
+    });
+
+    const menuButton = new PanelButton({
       labelStringProperty: headingStringProperty,
       indicatorProperty: channel.enabledProperty,
       indicatorColor: color,
@@ -105,21 +171,14 @@ class VerticalControlPanelColumn extends VBox {
       listener: () => {
         channel.enabledProperty.value = !channel.enabledProperty.value;
       },
-      minWidth: 58,
+      minWidth: 52,
     });
 
     const voltsSwitch = new RotarySwitch(
       channel.voltsPerDivisionProperty,
       numberItems(SCOPE_VOLTS_PER_DIV_STEPS, formatVoltsPerDiv),
-      { radius: 22, captionStringProperty: v.voltsPerDivisionStringProperty, accessibleName: a11y.voltsPerDivision },
+      { radius: 20, captionStringProperty: v.voltsPerDivisionStringProperty, accessibleName: a11y.voltsPerDivision },
     );
-
-    const positionKnob = new RotaryKnob(channel.positionProperty, SCOPE_POSITION_RANGE, {
-      radius: 20,
-      captionStringProperty: v.positionStringProperty,
-      valueStringProperty: derivedString(channel.positionProperty, formatDivisions),
-      accessibleName: a11y.position,
-    });
 
     const couplingSwitch = new RotarySwitch(
       channel.couplingProperty,
@@ -128,7 +187,7 @@ class VerticalControlPanelColumn extends VBox {
         AC: v.acStringProperty,
         GND: v.gndStringProperty,
       }),
-      { radius: 18, captionStringProperty: v.couplingStringProperty, accessibleName: a11y.coupling },
+      { radius: 14, captionStringProperty: v.couplingStringProperty, accessibleName: a11y.coupling },
     );
 
     const invertButton = new PanelButton({
@@ -138,22 +197,23 @@ class VerticalControlPanelColumn extends VBox {
       listener: () => {
         channel.invertedProperty.value = !channel.invertedProperty.value;
       },
-      minWidth: 58,
+      minWidth: 52,
+      fontSize: 11,
     });
 
     super({
       align: "center",
-      spacing: 9,
+      spacing: 6,
       children: [
         new Text(headingStringProperty, { font: CHANNEL_FONT, fill: color }),
-        onButton,
-        voltsSwitch,
         positionKnob,
+        menuButton,
+        voltsSwitch,
         couplingSwitch,
         invertButton,
       ],
     });
 
-    this.order = [onButton, voltsSwitch, positionKnob, couplingSwitch, invertButton];
+    this.order = [positionKnob, menuButton, voltsSwitch, couplingSwitch, invertButton];
   }
 }

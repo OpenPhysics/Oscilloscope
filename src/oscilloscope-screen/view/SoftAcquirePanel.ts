@@ -1,41 +1,67 @@
 /**
- * AcquisitionPanel.ts
+ * SoftAcquirePanel.ts
  *
- * The acquisition / display-control cluster: Run/Stop, Single-shot capture,
- * Autoset, a persistence toggle, measurement cursors, CSV / PNG export, and the
- * CH1±CH2 math-channel selector.
+ * TBS-style soft / acquire cluster: Cursor, Measure, Help on one row; Run/Stop,
+ * Single, Autoset on the next; Persist and export as secondary actions.
  */
 
+import type { TProperty } from "scenerystack/axon";
 import { HBox, type Node, Text, VBox } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
 import { PanelButton } from "../../common/controls/PanelButton.js";
-import { RotarySwitch } from "../../common/controls/RotarySwitch.js";
 import { SimPanel } from "../../common/SimPanel.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
-import { MATH_MODES, type OscilloscopeModel } from "../model/OscilloscopeModel.js";
-import { unionItems } from "./controlHelpers.js";
+import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
 
-const HEADING_FONT = new PhetFont({ size: 15, weight: "bold" });
+const HEADING_FONT = new PhetFont({ size: 13, weight: "bold" });
 
-export type AcquisitionPanelOptions = {
-  /** Capture a single sweep, then stop. */
+export type SoftAcquirePanelOptions = {
+  showMeasurementsProperty: TProperty<boolean>;
   onSingle: () => void;
-  /** Auto-scale the display to the current signal. */
   onAutoset: () => void;
-  /** Export the current trace data as a CSV download. */
+  onHelp: () => void;
   onExportCsv: () => void;
-  /** Save the current display as a PNG download. */
   onExportImage: () => void;
 };
 
-export class AcquisitionPanel extends SimPanel {
+export class SoftAcquirePanel extends SimPanel {
   public readonly controlsInOrder: Node[];
 
-  public constructor(model: OscilloscopeModel, options: AcquisitionPanelOptions) {
+  public constructor(model: OscilloscopeModel, options: SoftAcquirePanelOptions) {
     const strings = StringManager.getInstance();
     const acq = strings.getAcquisition();
     const a11y = strings.getA11yStrings().controls;
+
+    const cursorButton = new PanelButton({
+      labelStringProperty: acq.cursorsStringProperty,
+      indicatorProperty: model.cursorsEnabledProperty,
+      accessibleName: a11y.cursorsStringProperty,
+      listener: () => {
+        model.cursorsEnabledProperty.value = !model.cursorsEnabledProperty.value;
+      },
+      minWidth: 72,
+      fontSize: 11,
+    });
+
+    const measureButton = new PanelButton({
+      labelStringProperty: acq.measureStringProperty,
+      indicatorProperty: options.showMeasurementsProperty,
+      accessibleName: a11y.measureStringProperty,
+      listener: () => {
+        options.showMeasurementsProperty.value = !options.showMeasurementsProperty.value;
+      },
+      minWidth: 72,
+      fontSize: 11,
+    });
+
+    const helpButton = new PanelButton({
+      labelStringProperty: acq.helpStringProperty,
+      accessibleName: a11y.helpStringProperty,
+      listener: options.onHelp,
+      minWidth: 72,
+      fontSize: 11,
+    });
 
     const runStopButton = new PanelButton({
       labelStringProperty: acq.runStopStringProperty,
@@ -52,14 +78,14 @@ export class AcquisitionPanel extends SimPanel {
       labelStringProperty: acq.singleStringProperty,
       accessibleName: a11y.singleStringProperty,
       listener: options.onSingle,
-      minWidth: 80,
+      minWidth: 72,
     });
 
     const autosetButton = new PanelButton({
       labelStringProperty: acq.autosetStringProperty,
       accessibleName: a11y.autosetStringProperty,
       listener: options.onAutoset,
-      minWidth: 80,
+      minWidth: 72,
     });
 
     const persistButton = new PanelButton({
@@ -69,67 +95,49 @@ export class AcquisitionPanel extends SimPanel {
       listener: () => {
         model.persistenceProperty.value = !model.persistenceProperty.value;
       },
-      minWidth: 80,
-    });
-
-    const cursorsButton = new PanelButton({
-      labelStringProperty: acq.cursorsStringProperty,
-      indicatorProperty: model.cursorsEnabledProperty,
-      accessibleName: a11y.cursorsStringProperty,
-      listener: () => {
-        model.cursorsEnabledProperty.value = !model.cursorsEnabledProperty.value;
-      },
-      minWidth: 80,
+      minWidth: 64,
+      fontSize: 11,
     });
 
     const exportCsvButton = new PanelButton({
       labelStringProperty: acq.exportCsvStringProperty,
       accessibleName: a11y.exportCsvStringProperty,
       listener: options.onExportCsv,
-      minWidth: 80,
+      minWidth: 64,
+      fontSize: 11,
     });
 
     const exportImageButton = new PanelButton({
       labelStringProperty: acq.exportImageStringProperty,
       accessibleName: a11y.exportImageStringProperty,
       listener: options.onExportImage,
-      minWidth: 80,
+      minWidth: 64,
+      fontSize: 11,
     });
-
-    const mathSwitch = new RotarySwitch(
-      model.mathModeProperty,
-      unionItems(MATH_MODES, {
-        off: acq.mathOffStringProperty,
-        add: acq.mathAddStringProperty,
-        subtract: acq.mathSubtractStringProperty,
-      }),
-      { radius: 20, captionStringProperty: acq.mathStringProperty, accessibleName: a11y.mathStringProperty },
-    );
 
     const content = new VBox({
       align: "center",
-      spacing: 9,
+      spacing: 8,
       children: [
         new Text(acq.titleStringProperty, { font: HEADING_FONT, fill: OscilloscopeColors.textColorProperty }),
-        runStopButton,
-        new HBox({ spacing: 8, children: [singleButton, autosetButton] }),
-        new HBox({ spacing: 8, children: [persistButton, cursorsButton] }),
-        new HBox({ spacing: 8, children: [exportCsvButton, exportImageButton] }),
-        mathSwitch,
+        new HBox({ spacing: 6, children: [cursorButton, measureButton, helpButton] }),
+        new HBox({ spacing: 6, children: [runStopButton, singleButton, autosetButton] }),
+        new HBox({ spacing: 6, children: [persistButton, exportCsvButton, exportImageButton] }),
       ],
     });
 
-    super(content);
+    super(content, { xMargin: 10, yMargin: 8 });
 
     this.controlsInOrder = [
+      cursorButton,
+      measureButton,
+      helpButton,
       runStopButton,
       singleButton,
       autosetButton,
       persistButton,
-      cursorsButton,
       exportCsvButton,
       exportImageButton,
-      mathSwitch,
     ];
   }
 }

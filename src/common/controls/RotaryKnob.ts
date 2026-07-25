@@ -3,7 +3,7 @@
  *
  * A continuous rotary knob — the workhorse control of a real oscilloscope's
  * front panel. It replaces the usual on-screen slider: the user grabs the knob
- * and scrubs (drag up / right to increase, down / left to decrease), and the
+ * and turns it (relative angular drag around the dial centre), and the
  * pointer indicator rotates through a 270° sweep to show the value.
  *
  * Accessibility comes for free: the knob mixes in {@link AccessibleSlider}, so it
@@ -120,6 +120,10 @@ export class RotaryKnob extends AccessibleSliderNode {
     const knob = new Node({
       children: [body, innerDisc, tickAt(START_DEGREES), tickAt(START_DEGREES + SWEEP_DEGREES), indicator],
     });
+    // Dial faces are small (~40 px across); inflate the pick target so they are
+    // easy to grab without hunting for the rim.
+    knob.mouseArea = knob.localBounds.dilated(14);
+    knob.touchArea = knob.localBounds.dilated(18);
 
     // ── Caption + live readout ────────────────────────────────────────────────
     const labelChildren: Node[] = [knob];
@@ -147,8 +151,8 @@ export class RotaryKnob extends AccessibleSliderNode {
     };
     valueProperty.link(updateIndicator);
 
-    // ── Pointer scrub interaction ─────────────────────────────────────────────
-    const dragListener = new KnobDragListener(valueProperty, range);
+    // ── Pointer turn interaction (relative angle about the dial centre) ───────
+    const dragListener = new KnobDragListener(valueProperty, range, knob);
     knob.addInputListener(dragListener);
 
     this.disposeRotaryKnob = () => {

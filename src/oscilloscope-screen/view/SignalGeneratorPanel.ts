@@ -1,17 +1,23 @@
 /**
  * SignalGeneratorPanel.ts
  *
- * The function-generator section of the front panel: a rotary switch to pick
- * CH1's input (generator or microphone), a waveform selector, and knobs for
- * frequency, amplitude, DC offset, duty cycle, and the CH2 phase shift. Every
- * control is a real-instrument knob or switch — no sliders.
+ * The CH1/CH2 signal-source module: waveform combo, sliders for frequency /
+ * amplitude / offset / duty / phase, microphone status, and OUT A / OUT B / MIC
+ * source jacks for patch cables into the scope BNCs.
  */
 
-import { DerivedProperty, type TReadOnlyProperty } from "scenerystack/axon";
-import { HBox, type Node, Text, VBox } from "scenerystack/scenery";
+import {
+  DerivedProperty,
+  NumberProperty,
+  type Property,
+  type TProperty,
+  type TReadOnlyProperty,
+} from "scenerystack/axon";
+import { Dimension2, Range } from "scenerystack/dot";
+import { HBox, Node, Rectangle, Text, VBox } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
-import { RotaryKnob } from "../../common/controls/RotaryKnob.js";
-import { RotarySwitch } from "../../common/controls/RotarySwitch.js";
+import { ComboBox, type ComboBoxItem, HSlider, type HSliderOptions } from "scenerystack/sun";
+import { LIGHT_SURFACE_TEXT_FILL, SIM_COMBO_BOX_OPTIONS } from "../../common/SimButtonOptions.js";
 import { SimPanel } from "../../common/SimPanel.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
@@ -23,41 +29,152 @@ import {
   FG_PHASE_RANGE,
 } from "../../SimConstants.js";
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
-import { SIGNAL_SOURCES } from "../model/SignalSource.js";
 import { WAVEFORMS } from "../model/Waveform.js";
-import { derivedString, unionItems } from "./controlHelpers.js";
+import { derivedString } from "./controlHelpers.js";
 import { formatDegrees, formatFrequency, formatPercent, formatVoltage } from "./formatUnits.js";
 
 const HEADING_FONT = new PhetFont({ size: 15, weight: "bold" });
+const LABEL_FONT = new PhetFont(12);
+const VALUE_FONT = new PhetFont({ size: 12, weight: "bold" });
+const COMBO_FONT = new PhetFont(13);
+const TRACK_SIZE = new Dimension2(150, 4);
+const FREQUENCY_TRACK_SIZE = new Dimension2(318, 4);
+const THUMB_SIZE = new Dimension2(14, 24);
+
+type SliderRowOptions = {
+  labelStringProperty: TReadOnlyProperty<string>;
+  valueStringProperty: TReadOnlyProperty<string>;
+  accessibleName: TReadOnlyProperty<string>;
+  enabledProperty?: TReadOnlyProperty<boolean>;
+  trackSize?: Dimension2;
+} & Pick<HSliderOptions, "keyboardStep" | "shiftKeyboardStep" | "pageKeyboardStep" | "constrainValue">;
+
+function createLog10Property(linearProperty: TProperty<number>, range: Range): NumberProperty {
+  const logRange = new Range(Math.log10(range.min), Math.log10(range.max));
+  const logProperty = new NumberProperty(Math.log10(linearProperty.value), { range: logRange });
+  let syncing = false;
+  logProperty.link((logValue) => {
+    if (syncing) {
+      return;
+    }
+    syncing = true;
+    linearProperty.value = 10 ** logValue;
+    syncing = false;
+  });
+  linearProperty.link((value) => {
+    if (syncing) {
+      return;
+    }
+    syncing = true;
+    const clamped = Math.max(range.min, Math.min(range.max, value));
+    logProperty.value = Math.log10(clamped);
+    syncing = false;
+  });
+  return logProperty;
+}
+
+function createSliderRow(valueProperty: TProperty<number>, range: Range, options: SliderRowOptions): Node {
+  const trackSize = options.trackSize ?? TRACK_SIZE;
+  const label = new Text(options.labelStringProperty, {
+    font: LABEL_FONT,
+    fill: OscilloscopeColors.textColorProperty,
+    maxWidth: Math.min(110, trackSize.width * 0.55),
+  });
+  const valueText = new Text(options.valueStringProperty, {
+    font: VALUE_FONT,
+    fill: OscilloscopeColors.generatorAccentColorProperty,
+    maxWidth: Math.min(100, trackSize.width * 0.45),
+  });
+
+  const sliderOptions: HSliderOptions = {
+    trackSize,
+    thumbSize: THUMB_SIZE,
+    trackFillEnabled: OscilloscopeColors.generatorSliderTrackColorProperty,
+    trackFillDisabled: OscilloscopeColors.ledOffColorProperty,
+    trackStroke: OscilloscopeColors.generatorPanelBorderColorProperty,
+    thumbFill: OscilloscopeColors.generatorAccentColorProperty,
+    thumbFillHighlighted: OscilloscopeColors.generatorAccentHighlightColorProperty,
+    thumbStroke: OscilloscopeColors.generatorPanelBorderColorProperty,
+    majorTickStroke: OscilloscopeColors.generatorPanelBorderColorProperty,
+    accessibleName: options.accessibleName,
+    soundGenerator: null,
+  };
+  if (options.enabledProperty) {
+    sliderOptions.enabledProperty = options.enabledProperty;
+  }
+  if (options.keyboardStep !== undefined) {
+    sliderOptions.keyboardStep = options.keyboardStep;
+  }
+  if (options.shiftKeyboardStep !== undefined) {
+    sliderOptions.shiftKeyboardStep = options.shiftKeyboardStep;
+  }
+  if (options.pageKeyboardStep !== undefined) {
+    sliderOptions.pageKeyboardStep = options.pageKeyboardStep;
+  }
+  if (options.constrainValue) {
+    sliderOptions.constrainValue = options.constrainValue;
+  }
+
+  const slider = new HSlider(valueProperty as Property<number>, range, sliderOptions);
+
+  const header = new Node({ children: [label, valueText] });
+  const layoutHeader = (): void => {
+    label.left = 0;
+    label.centerY = 0;
+    valueText.right = trackSize.width;
+    valueText.centerY = 0;
+  };
+  label.boundsProperty.link(layoutHeader);
+  valueText.boundsProperty.link(layoutHeader);
+
+  return new VBox({
+    align: "left",
+    spacing: 2,
+    children: [header, slider],
+  });
+}
+
+function createComboItems<T extends string>(
+  values: readonly T[],
+  labels: Record<T, TReadOnlyProperty<string>>,
+): ComboBoxItem<T>[] {
+  return values.map((value) => ({
+    value,
+    createNode: () =>
+      new Text(labels[value], {
+        font: COMBO_FONT,
+        fill: LIGHT_SURFACE_TEXT_FILL,
+        maxWidth: 140,
+      }),
+    accessibleName: labels[value],
+  }));
+}
+
+export type SignalGeneratorPanelOptions = {
+  listParent: Node;
+  sourceJackA: Node;
+  sourceJackB: Node;
+  sourceJackMic: Node;
+};
 
 export class SignalGeneratorPanel extends SimPanel {
-  public readonly sourceSwitch: Node;
-  public readonly waveformSwitch: Node;
-  public readonly frequencyKnob: Node;
-  public readonly amplitudeKnob: Node;
-  public readonly offsetKnob: Node;
-  public readonly dutyKnob: Node;
-  public readonly phaseKnob: Node;
+  public readonly waveformComboBox: Node;
+  public readonly frequencySlider: Node;
+  public readonly amplitudeSlider: Node;
+  public readonly offsetSlider: Node;
+  public readonly dutySlider: Node;
+  public readonly phaseSlider: Node;
 
-  public constructor(model: OscilloscopeModel) {
+  public constructor(model: OscilloscopeModel, options: SignalGeneratorPanelOptions) {
     const strings = StringManager.getInstance();
     const g = strings.getGenerator();
     const src = strings.getSource();
     const controls = strings.getA11yStrings().controls;
     const fg = model.functionGenerator;
 
-    const sourceSwitch = new RotarySwitch(
-      model.sourceProperty,
-      unionItems(SIGNAL_SOURCES, {
-        functionGenerator: src.functionGeneratorStringProperty,
-        audio: src.audioStringProperty,
-      }),
-      { radius: 20, captionStringProperty: src.titleStringProperty, accessibleName: controls.sourceStringProperty },
-    );
-
-    const waveformSwitch = new RotarySwitch(
+    const waveformComboBox = new ComboBox(
       fg.waveformProperty,
-      unionItems(WAVEFORMS, {
+      createComboItems(WAVEFORMS, {
         sine: g.sineStringProperty,
         square: g.squareStringProperty,
         triangle: g.triangleStringProperty,
@@ -65,46 +182,51 @@ export class SignalGeneratorPanel extends SimPanel {
         pulse: g.pulseStringProperty,
         noise: g.noiseStringProperty,
       }),
-      { radius: 22, captionStringProperty: g.waveformStringProperty, accessibleName: controls.waveformStringProperty },
+      options.listParent,
+      {
+        ...SIM_COMBO_BOX_OPTIONS,
+        accessibleName: controls.waveformStringProperty,
+        comboBoxVoicingNameResponsePattern: "{{value}}",
+      },
     );
 
-    const frequencyKnob = new RotaryKnob(fg.frequencyProperty, FG_FREQUENCY_RANGE, {
-      captionStringProperty: g.frequencyStringProperty,
+    const logFrequencyProperty = createLog10Property(fg.frequencyProperty, FG_FREQUENCY_RANGE);
+    const frequencySlider = createSliderRow(logFrequencyProperty, logFrequencyProperty.range, {
+      labelStringProperty: g.frequencyStringProperty,
       valueStringProperty: derivedString(fg.frequencyProperty, formatFrequency),
       accessibleName: controls.frequencyStringProperty,
-      keyboardStep: 10,
-      shiftKeyboardStep: 1,
-      pageKeyboardStep: 100,
+      trackSize: FREQUENCY_TRACK_SIZE,
+      keyboardStep: 0.05,
+      shiftKeyboardStep: 0.01,
+      pageKeyboardStep: 1,
     });
-    const amplitudeKnob = new RotaryKnob(fg.amplitudeProperty, FG_AMPLITUDE_RANGE, {
-      captionStringProperty: g.amplitudeStringProperty,
+
+    const amplitudeSlider = createSliderRow(fg.amplitudeProperty, FG_AMPLITUDE_RANGE, {
+      labelStringProperty: g.amplitudeStringProperty,
       valueStringProperty: derivedString(fg.amplitudeProperty, formatVoltage),
       accessibleName: controls.amplitudeStringProperty,
     });
-    const offsetKnob = new RotaryKnob(fg.offsetProperty, FG_OFFSET_RANGE, {
-      captionStringProperty: g.offsetStringProperty,
+    const offsetSlider = createSliderRow(fg.offsetProperty, FG_OFFSET_RANGE, {
+      labelStringProperty: g.offsetStringProperty,
       valueStringProperty: derivedString(fg.offsetProperty, formatVoltage),
       accessibleName: controls.offsetStringProperty,
     });
-    const dutyKnob = new RotaryKnob(fg.dutyCycleProperty, FG_DUTY_CYCLE_RANGE, {
-      captionStringProperty: g.dutyStringProperty,
+    const dutySlider = createSliderRow(fg.dutyCycleProperty, FG_DUTY_CYCLE_RANGE, {
+      labelStringProperty: g.dutyStringProperty,
       valueStringProperty: derivedString(fg.dutyCycleProperty, formatPercent),
       accessibleName: controls.dutyStringProperty,
-      // Duty cycle only shapes the square / pulse waveforms.
       enabledProperty: new DerivedProperty(
         [fg.waveformProperty],
         (waveform) => waveform === "square" || waveform === "pulse",
       ),
     });
-    const phaseKnob = new RotaryKnob(fg.phaseProperty, FG_PHASE_RANGE, {
-      captionStringProperty: g.phaseStringProperty,
+    const phaseSlider = createSliderRow(fg.phaseProperty, FG_PHASE_RANGE, {
+      labelStringProperty: g.phaseStringProperty,
       valueStringProperty: derivedString(fg.phaseProperty, formatDegrees),
       accessibleName: controls.phaseStringProperty,
       keyboardStep: 5,
       shiftKeyboardStep: 1,
       pageKeyboardStep: 45,
-      // Phase shifts CH2 relative to CH1, so it only matters when CH2 is displayed.
-      enabledProperty: new DerivedProperty([model.ch2.enabledProperty], (on) => on),
     });
 
     const status = src.status;
@@ -116,8 +238,13 @@ export class SignalGeneratorPanel extends SimPanel {
         status.activeStringProperty,
         status.deniedStringProperty,
         status.unsupportedStringProperty,
+        model.ch1.inputProperty,
+        model.ch2.inputProperty,
       ],
-      (state, idle, requesting, active, denied, unsupported) => {
+      (state, idle, requesting, active, denied, unsupported, ch1In, ch2In) => {
+        if (ch1In !== "microphone" && ch2In !== "microphone") {
+          return idle;
+        }
         switch (state) {
           case "requesting":
             return requesting;
@@ -135,29 +262,69 @@ export class SignalGeneratorPanel extends SimPanel {
     const statusText = new Text(statusTextProperty, {
       font: new PhetFont({ size: 11, style: "italic" }),
       fill: OscilloscopeColors.textColorProperty,
-      visibleProperty: new DerivedProperty([model.sourceProperty], (s) => s === "audio"),
+      visibleProperty: new DerivedProperty(
+        [model.ch1.inputProperty, model.ch2.inputProperty],
+        (a, b) => a === "microphone" || b === "microphone",
+      ),
+      maxWidth: 300,
+    });
+
+    const heading = new HBox({
+      spacing: 8,
+      children: [
+        new Rectangle(0, 0, 4, 16, {
+          fill: OscilloscopeColors.generatorAccentColorProperty,
+          cornerRadius: 1,
+        }),
+        new Text(g.titleStringProperty, {
+          font: HEADING_FONT,
+          fill: OscilloscopeColors.generatorAccentColorProperty,
+          maxWidth: 240,
+        }),
+      ],
     });
 
     const content = new VBox({
       align: "left",
-      spacing: 10,
+      spacing: 8,
       children: [
-        new Text(g.titleStringProperty, { font: HEADING_FONT, fill: OscilloscopeColors.textColorProperty }),
-        new HBox({ spacing: 18, align: "top", children: [sourceSwitch, waveformSwitch] }),
+        heading,
+        new VBox({
+          align: "left",
+          spacing: 3,
+          children: [
+            new Text(g.waveformStringProperty, {
+              font: LABEL_FONT,
+              fill: OscilloscopeColors.textColorProperty,
+              maxWidth: 140,
+            }),
+            waveformComboBox,
+          ],
+        }),
         statusText,
-        new HBox({ spacing: 12, align: "top", children: [frequencyKnob, amplitudeKnob, offsetKnob] }),
-        new HBox({ spacing: 12, align: "top", children: [dutyKnob, phaseKnob] }),
+        frequencySlider,
+        new HBox({ spacing: 18, align: "top", children: [amplitudeSlider, offsetSlider] }),
+        new HBox({ spacing: 18, align: "top", children: [dutySlider, phaseSlider] }),
+        new HBox({
+          spacing: 20,
+          align: "top",
+          children: [options.sourceJackA, options.sourceJackB, options.sourceJackMic],
+        }),
       ],
     });
 
-    super(content);
+    super(content, {
+      fill: OscilloscopeColors.generatorPanelBackgroundColorProperty,
+      stroke: OscilloscopeColors.generatorPanelBorderColorProperty,
+      xMargin: 14,
+      yMargin: 12,
+    });
 
-    this.sourceSwitch = sourceSwitch;
-    this.waveformSwitch = waveformSwitch;
-    this.frequencyKnob = frequencyKnob;
-    this.amplitudeKnob = amplitudeKnob;
-    this.offsetKnob = offsetKnob;
-    this.dutyKnob = dutyKnob;
-    this.phaseKnob = phaseKnob;
+    this.waveformComboBox = waveformComboBox;
+    this.frequencySlider = frequencySlider;
+    this.amplitudeSlider = amplitudeSlider;
+    this.offsetSlider = offsetSlider;
+    this.dutySlider = dutySlider;
+    this.phaseSlider = phaseSlider;
   }
 }

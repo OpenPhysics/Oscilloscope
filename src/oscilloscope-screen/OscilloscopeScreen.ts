@@ -10,7 +10,7 @@
  * shared create*Icon() factories in src/common/{SimName}ScreenIcons.ts (see
  * doc/multi-screen.md).
  */
-import type { TReadOnlyProperty } from "scenerystack/axon";
+import type { TProperty, TReadOnlyProperty } from "scenerystack/axon";
 import { optionize } from "scenerystack/phet-core";
 import type { ScreenOptions } from "scenerystack/sim";
 import { Screen } from "scenerystack/sim";
@@ -22,7 +22,8 @@ import { OscilloscopeScreenView } from "./view/OscilloscopeScreenView.js";
 
 type SelfOptions = {
   // Preference (owned by main.ts) controlling the on-screen measurement readout.
-  showMeasurementsProperty: TReadOnlyProperty<boolean>;
+  // Writable so the front-panel Measure button can toggle it.
+  showMeasurementsProperty: TProperty<boolean>;
   // Preference-owned noise injection controls, read live by the model's generator.
   noiseEnabledProperty: TReadOnlyProperty<boolean>;
   noiseAmplitudeProperty: TReadOnlyProperty<number>;
