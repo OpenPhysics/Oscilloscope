@@ -14,6 +14,7 @@
 
 import { Property, type TProperty, type TReadOnlyProperty } from "scenerystack/axon";
 import type { Range } from "scenerystack/dot";
+import { optionize } from "scenerystack/phet-core";
 import { Circle, Line, Node, type NodeOptions, Text, type TPaint, VBox } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
 import { AccessibleSlider, type AccessibleSliderOptions } from "scenerystack/sun";
@@ -23,7 +24,12 @@ import { KnobDragListener } from "./KnobDragListener.js";
 const SWEEP_DEGREES = 270;
 const START_DEGREES = -135; // pointer angle at the minimum value (measured from 12 o'clock, clockwise +)
 
-export type RotaryKnobOptions = {
+/** Fractions of the full range used for the default keyboard step sizes. */
+const KEYBOARD_STEP_FRACTION = 1 / 20;
+const SHIFT_KEYBOARD_STEP_FRACTION = 1 / 100;
+const PAGE_KEYBOARD_STEP_FRACTION = 1 / 5;
+
+type SelfOptions = {
   /** Radius of the knob body, in pixels. */
   radius?: number;
   /** Caption drawn beneath the knob. */
@@ -32,11 +38,22 @@ export type RotaryKnobOptions = {
   valueStringProperty?: TReadOnlyProperty<string> | null;
   /** Color of the caption / readout text. */
   textFill?: TPaint;
-  /** Arrow-key step; defaults to range/20. */
-  keyboardStep?: number;
-  shiftKeyboardStep?: number;
-  pageKeyboardStep?: number;
-} & Pick<NodeOptions, "accessibleName" | "accessibleHelpText" | "enabledProperty" | "visibleProperty">;
+};
+
+type ParentOptions = AccessibleSliderOptions &
+  Pick<NodeOptions, "accessibleName" | "accessibleHelpText" | "enabledProperty" | "visibleProperty" | "cursor">;
+
+export type RotaryKnobOptions = SelfOptions &
+  Pick<
+    ParentOptions,
+    | "accessibleName"
+    | "accessibleHelpText"
+    | "enabledProperty"
+    | "visibleProperty"
+    | "keyboardStep"
+    | "shiftKeyboardStep"
+    | "pageKeyboardStep"
+  >;
 
 // AccessibleSlider trait mixed into Node; options are the first constructor arg.
 const AccessibleSliderNode = AccessibleSlider(Node, 0);
@@ -46,33 +63,28 @@ export class RotaryKnob extends AccessibleSliderNode {
 
   public constructor(valueProperty: TProperty<number>, range: Range, providedOptions?: RotaryKnobOptions) {
     const length = range.getLength();
-    const radius = providedOptions?.radius ?? 24;
-    const captionStringProperty = providedOptions?.captionStringProperty ?? null;
-    const valueStringProperty = providedOptions?.valueStringProperty ?? null;
-    const textFill = providedOptions?.textFill ?? OscilloscopeColors.textColorProperty;
+    const enabledRangeProperty = new Property(range);
 
-    const superOptions: AccessibleSliderOptions & NodeOptions = {
-      valueProperty,
-      enabledRangeProperty: new Property(range),
-      keyboardStep: providedOptions?.keyboardStep ?? length / 20,
-      shiftKeyboardStep: providedOptions?.shiftKeyboardStep ?? length / 100,
-      pageKeyboardStep: providedOptions?.pageKeyboardStep ?? length / 5,
-      cursor: "pointer",
-    };
-    if (providedOptions?.accessibleName !== undefined) {
-      superOptions.accessibleName = providedOptions.accessibleName;
-    }
-    if (providedOptions?.accessibleHelpText !== undefined) {
-      superOptions.accessibleHelpText = providedOptions.accessibleHelpText;
-    }
-    if (providedOptions?.enabledProperty !== undefined) {
-      superOptions.enabledProperty = providedOptions.enabledProperty;
-    }
-    if (providedOptions?.visibleProperty !== undefined) {
-      superOptions.visibleProperty = providedOptions.visibleProperty;
-    }
+    const options = optionize<RotaryKnobOptions, SelfOptions, ParentOptions>()(
+      {
+        radius: 24,
+        captionStringProperty: null,
+        valueStringProperty: null,
+        textFill: OscilloscopeColors.textColorProperty,
+        // AccessibleSlider:
+        valueProperty,
+        enabledRangeProperty,
+        keyboardStep: length * KEYBOARD_STEP_FRACTION,
+        shiftKeyboardStep: length * SHIFT_KEYBOARD_STEP_FRACTION,
+        pageKeyboardStep: length * PAGE_KEYBOARD_STEP_FRACTION,
+        cursor: "pointer",
+      },
+      providedOptions,
+    );
 
-    super(superOptions);
+    const { radius, captionStringProperty, valueStringProperty, textFill } = options;
+
+    super(options);
 
     // ── Knob body ─────────────────────────────────────────────────────────────
     const body = new Circle(radius, {
@@ -141,7 +153,9 @@ export class RotaryKnob extends AccessibleSliderNode {
 
     this.disposeRotaryKnob = () => {
       valueProperty.unlink(updateIndicator);
+      knob.removeInputListener(dragListener);
       dragListener.dispose();
+      enabledRangeProperty.dispose();
     };
   }
 

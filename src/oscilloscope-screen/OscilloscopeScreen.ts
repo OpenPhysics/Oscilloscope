@@ -10,7 +10,7 @@
  * shared create*Icon() factories in src/common/{SimName}ScreenIcons.ts (see
  * doc/multi-screen.md).
  */
-import type { PhetioProperty, TReadOnlyProperty } from "scenerystack/axon";
+import type { TReadOnlyProperty } from "scenerystack/axon";
 import { optionize } from "scenerystack/phet-core";
 import type { ScreenOptions } from "scenerystack/sim";
 import { Screen } from "scenerystack/sim";
@@ -24,12 +24,12 @@ type SelfOptions = {
   // Preference (owned by main.ts) controlling the on-screen measurement readout.
   showMeasurementsProperty: TReadOnlyProperty<boolean>;
   // Preference-owned noise injection controls, read live by the model's generator.
-  noiseEnabledProperty: PhetioProperty<boolean>;
-  noiseAmplitudeProperty: PhetioProperty<number>;
+  noiseEnabledProperty: TReadOnlyProperty<boolean>;
+  noiseAmplitudeProperty: TReadOnlyProperty<number>;
 };
 
-// Require tandem to be explicit — accidental omission would break PhET-iO.
-type OscilloscopeScreenOptions = SelfOptions & ScreenOptions & { tandem: Tandem };
+// Require tandem to be explicit: joist threads it through to the screen's view.
+export type OscilloscopeScreenOptions = SelfOptions & ScreenOptions & { tandem: Tandem };
 
 export class OscilloscopeScreen extends Screen<OscilloscopeModel, OscilloscopeScreenView> {
   public constructor(options: OscilloscopeScreenOptions) {

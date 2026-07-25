@@ -123,11 +123,13 @@ export class AudioInput {
 
   /**
    * Fills `out` with the most recent microphone samples spanning `windowSeconds`
-   * of real time, resampled to `out.length` points. A simple rising-edge trigger
+   * of real time, resampled to `out.length` points. A level/slope trigger search
    * stabilises the displayed waveform. Values are in [-1, 1] and treated as volts
    * by the oscilloscope. When no live signal is available, `out` is zeroed.
    *
-   * @returns true when live data was written, false when a flat line was written
+   * @returns true when a trigger event was found in the captured samples. The
+   *   model uses this to decide whether a `normal` / `single` sweep may update;
+   *   a flat line (no microphone) never counts as triggered.
    */
   public fillTrace(
     out: Float32Array,
@@ -149,6 +151,7 @@ export class AudioInput {
     // the leading part of the buffer so a periodic signal appears to stand still.
     // Fall back to index 0.
     let start = 0;
+    let triggered = false;
     const searchLimit = Math.min(total - windowSamples, Math.floor(total / 2));
     for (let i = 1; i < searchLimit; i++) {
       const prev = this.timeData[i - 1] ?? 0;
@@ -156,6 +159,7 @@ export class AudioInput {
       const crossed = slope === "rising" ? prev < level && curr >= level : prev > level && curr <= level;
       if (crossed) {
         start = i;
+        triggered = true;
         break;
       }
     }
@@ -171,7 +175,7 @@ export class AudioInput {
       const idx = start - half + offset;
       out[j] = this.timeData[Math.max(0, Math.min(total - 1, idx))] ?? 0;
     }
-    return true;
+    return triggered;
   }
 
   public dispose(): void {

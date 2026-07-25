@@ -3,14 +3,17 @@
  *
  * Unit tests for the top-level model: dual-channel trace sampling for the
  * function-generator source, the time window derived from time/div (with the ×10
- * magnifier), input coupling, source switching, and reset.
+ * magnifier), input coupling, trigger modes, the noiseless measurement trace,
+ * source switching, and reset.
  *
- * The microphone path is not exercised here — the test environment mocks
- * AudioContext and provides no getUserMedia, so the audio source simply yields a
- * flat line, which we assert.
+ * The microphone path is only exercised structurally — the test environment mocks
+ * AudioContext and provides no getUserMedia, so the audio source yields a flat
+ * line. Tests that care about audio therefore assert on the capture call rather
+ * than on sample values.
  */
 
-import { describe, expect, it } from "vitest";
+import { BooleanProperty, NumberProperty } from "scenerystack/axon";
+import { describe, expect, it, vi } from "vitest";
 import { OscilloscopeModel } from "../src/oscilloscope-screen/model/OscilloscopeModel.js";
 import {
   FG_DEFAULT_FREQUENCY,
@@ -18,6 +21,14 @@ import {
   SCOPE_MAGNIFY_FACTOR,
   TRACE_SAMPLE_COUNT,
 } from "../src/SimConstants.js";
+
+/** A model whose generator injects noise, as the sim does by default. */
+function noisyModel(amplitude = 0.15): OscilloscopeModel {
+  return new OscilloscopeModel({
+    noiseEnabledProperty: new BooleanProperty(true),
+    noiseAmplitudeProperty: new NumberProperty(amplitude),
+  });
+}
 
 function extremes(trace: Float32Array): { min: number; max: number } {
   let min = Number.POSITIVE_INFINITY;
@@ -111,6 +122,32 @@ describe("OscilloscopeModel", () => {
     model.dispose();
   });
 
+  it("recaptures the microphone even when the trigger watches CH2", () => {
+    // The audio capture must run on every refresh whichever channel the trigger
+    // watches; otherwise the committed CH1 buffer is filled from stale scratch and
+    // the microphone trace freezes. (A flat-line assertion cannot catch this — the
+    // scratch buffer starts zeroed and there is no live mic under test — so assert
+    // the capture itself.)
+    const model = new OscilloscopeModel();
+    const fillTrace = vi.spyOn(model.audioInput, "fillTrace");
+
+    model.sourceProperty.value = "audio";
+    model.trigger.sourceProperty.value = "ch2";
+    model.refresh();
+    expect(fillTrace).toHaveBeenCalledTimes(1);
+
+    model.refresh();
+    expect(fillTrace).toHaveBeenCalledTimes(2);
+
+    // …and not at all once CH1 is back on the generator.
+    model.sourceProperty.value = "functionGenerator";
+    model.refresh();
+    expect(fillTrace).toHaveBeenCalledTimes(2);
+
+    fillTrace.mockRestore();
+    model.dispose();
+  });
+
   it("centers the trigger crossing on the display for a rising-edge trigger", () => {
     const model = new OscilloscopeModel();
     model.functionGenerator.waveformProperty.value = "sine";
@@ -145,6 +182,169 @@ describe("OscilloscopeModel", () => {
     // … and is falling there for a falling-slope trigger.
     expect(trace[center + 5] ?? 0).toBeLessThan(trace[center] ?? 0);
     model.dispose();
+  });
+
+  it("AC coupling holds the baseline steady as the timebase changes", () => {
+    // Regression: subtracting the mean of the *visible window* made the baseline
+    // of an asymmetric waveform jump whenever time/div changed the number of
+    // cycles on screen. A real scope's AC coupling is a fixed high-pass.
+    const model = new OscilloscopeModel();
+    model.functionGenerator.waveformProperty.value = "pulse";
+    model.functionGenerator.dutyCycleProperty.value = 0.2;
+    model.functionGenerator.offsetProperty.value = 0;
+    model.ch1.couplingProperty.value = "AC";
+
+    const centerVolts: number[] = [];
+    for (const timePerDivision of [0.001, 0.0012, 0.0017, 0.002]) {
+      model.timePerDivisionProperty.value = timePerDivision;
+      model.refresh();
+      const trace = model.ch1Trace;
+      centerVolts.push(trace[Math.floor(trace.length / 2)] ?? 0);
+    }
+
+    const spread = Math.max(...centerVolts) - Math.min(...centerVolts);
+    expect(spread).toBeLessThan(1e-6);
+    model.dispose();
+  });
+
+  it("AC coupling removes the analytic DC of a duty-cycled waveform", () => {
+    const model = new OscilloscopeModel();
+    model.functionGenerator.waveformProperty.value = "pulse";
+    model.functionGenerator.dutyCycleProperty.value = 0.25;
+    model.functionGenerator.amplitudeProperty.value = 1;
+    model.functionGenerator.offsetProperty.value = 0;
+    model.ch1.couplingProperty.value = "AC";
+    model.refresh();
+
+    // A 25% pulse of amplitude 1 has a DC component of 0.25 V, so AC coupling
+    // shifts the high level to +0.75 and the low level to -0.25.
+    const { min, max } = extremes(model.ch1Trace);
+    expect(max).toBeCloseTo(0.75, 5);
+    expect(min).toBeCloseTo(-0.25, 5);
+    model.dispose();
+  });
+
+  it("keeps a noiseless measurement trace alongside the displayed one", () => {
+    // Regression: measurements read the displayed (noisy) buffer, so Vpp — an
+    // extreme-value statistic — was biased outward by roughly the noise amplitude.
+    const model = noisyModel(0.15);
+    model.functionGenerator.waveformProperty.value = "sine";
+    model.functionGenerator.amplitudeProperty.value = 1;
+    model.refresh();
+
+    const displayed = extremes(model.ch1Trace);
+    const measured = extremes(model.primaryCleanTrace);
+
+    // The clean trace is a faithful ±1 sine …
+    expect(measured.max - measured.min).toBeCloseTo(2, 2);
+    // … while the displayed trace carries the injected noise.
+    expect(displayed.max - displayed.min).toBeGreaterThan(2.1);
+    model.dispose();
+  });
+
+  describe("trigger modes", () => {
+    /**
+     * Captures one sweep at amplitude 1, then puts the trigger level out of reach
+     * *and* doubles the amplitude. Whether the trace picks up the new amplitude is
+     * what distinguishes a free-running sweep from a held one.
+     */
+    function captureThenChangeSignalOutOfTrigger(model: OscilloscopeModel): Float32Array {
+      model.functionGenerator.amplitudeProperty.value = 1;
+      model.functionGenerator.offsetProperty.value = 0;
+      model.trigger.levelProperty.value = 0;
+      model.refresh();
+      const captured = model.ch1Trace.slice();
+
+      model.functionGenerator.amplitudeProperty.value = 2;
+      model.trigger.levelProperty.value = 10; // out of reach of the ±2 V signal
+      return captured;
+    }
+
+    it("auto free-runs when the trigger never fires", () => {
+      const model = new OscilloscopeModel();
+      model.trigger.modeProperty.value = "auto";
+      const captured = captureThenChangeSignalOutOfTrigger(model);
+
+      model.refresh();
+      // Auto keeps sweeping, so the new amplitude reaches the display.
+      expect(extremes(model.ch1Trace).max).toBeGreaterThan(1.5);
+      expect(Array.from(model.ch1Trace)).not.toEqual(Array.from(captured));
+      model.dispose();
+    });
+
+    it("normal holds the last sweep until the trigger fires", () => {
+      const model = new OscilloscopeModel();
+      model.trigger.modeProperty.value = "normal";
+      const captured = captureThenChangeSignalOutOfTrigger(model);
+
+      model.refresh();
+      // Held: the frozen sweep still shows the old amplitude.
+      expect(Array.from(model.ch1Trace)).toEqual(Array.from(captured));
+      expect(extremes(model.ch1Trace).max).toBeLessThan(1.5);
+
+      // Bring the level back within reach and the sweep resumes.
+      model.trigger.levelProperty.value = 0;
+      model.refresh();
+      expect(extremes(model.ch1Trace).max).toBeGreaterThan(1.5);
+      model.dispose();
+    });
+
+    it("single captures one triggered sweep and then stops", () => {
+      const model = new OscilloscopeModel();
+      model.timer.isPlayingProperty.value = true;
+      model.trigger.modeProperty.value = "single";
+
+      // Selecting SINGLE arms the capture.
+      expect(model.trigger.armedProperty.value).toBe(true);
+
+      model.refresh();
+      expect(model.trigger.armedProperty.value).toBe(false);
+      expect(model.timer.isPlayingProperty.value).toBe(false);
+      model.dispose();
+    });
+
+    it("single holds its capture until re-armed, and RUN re-arms it", () => {
+      const model = new OscilloscopeModel();
+      model.functionGenerator.amplitudeProperty.value = 1;
+      model.timer.isPlayingProperty.value = true;
+      model.trigger.modeProperty.value = "single";
+      model.refresh();
+      const captured = model.ch1Trace.slice();
+      expect(model.timer.isPlayingProperty.value).toBe(false);
+
+      // Disarmed: even a perfectly triggerable signal must not resample.
+      model.functionGenerator.amplitudeProperty.value = 3;
+      model.refresh();
+      expect(Array.from(model.ch1Trace)).toEqual(Array.from(captured));
+
+      // Pressing RUN re-arms, so the next sweep captures the new signal.
+      model.timer.isPlayingProperty.value = true;
+      expect(model.trigger.armedProperty.value).toBe(true);
+      model.refresh();
+      expect(extremes(model.ch1Trace).max).toBeGreaterThan(2);
+      expect(model.timer.isPlayingProperty.value).toBe(false);
+      model.dispose();
+    });
+
+    it("single stays armed while the trigger cannot fire", () => {
+      const model = new OscilloscopeModel();
+      model.timer.isPlayingProperty.value = true;
+      model.functionGenerator.amplitudeProperty.value = 1;
+      model.functionGenerator.offsetProperty.value = 0;
+      model.trigger.levelProperty.value = 10; // out of reach of the ±1 V signal
+      model.trigger.modeProperty.value = "single";
+
+      model.refresh();
+      // No trigger event, so the capture is still pending and the clock runs on.
+      expect(model.trigger.armedProperty.value).toBe(true);
+      expect(model.timer.isPlayingProperty.value).toBe(true);
+
+      model.trigger.levelProperty.value = 0;
+      model.refresh();
+      expect(model.trigger.armedProperty.value).toBe(false);
+      expect(model.timer.isPlayingProperty.value).toBe(false);
+      model.dispose();
+    });
   });
 
   it("reset() restores the source, sensitivities, and generator", () => {

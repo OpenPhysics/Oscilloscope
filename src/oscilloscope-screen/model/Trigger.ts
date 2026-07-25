@@ -12,7 +12,7 @@
  *              single (arm once, capture one sweep, then stop)
  */
 
-import { NumberProperty, StringUnionProperty } from "scenerystack/axon";
+import { BooleanProperty, NumberProperty, StringUnionProperty } from "scenerystack/axon";
 import OscilloscopeNamespace from "../../OscilloscopeNamespace.js";
 import { SCOPE_TRIGGER_LEVEL_RANGE } from "../../SimConstants.js";
 
@@ -50,11 +50,25 @@ export class Trigger {
     validValues: [...TRIGGER_MODES],
   });
 
+  /**
+   * Whether a `single` sweep is armed and still waiting for its trigger event.
+   * Only meaningful in `single` mode: the model clears it (and stops the sweep)
+   * as soon as one triggered capture completes, exactly like a bench scope's
+   * SINGLE button lighting until the capture lands.
+   */
+  public readonly armedProperty = new BooleanProperty(false);
+
+  /** Arms a fresh single-shot capture. */
+  public arm(): void {
+    this.armedProperty.value = true;
+  }
+
   public reset(): void {
     this.sourceProperty.reset();
     this.levelProperty.reset();
     this.slopeProperty.reset();
     this.modeProperty.reset();
+    this.armedProperty.reset();
   }
 
   public dispose(): void {
@@ -62,6 +76,7 @@ export class Trigger {
     this.levelProperty.dispose();
     this.slopeProperty.dispose();
     this.modeProperty.dispose();
+    this.armedProperty.dispose();
   }
 }
 

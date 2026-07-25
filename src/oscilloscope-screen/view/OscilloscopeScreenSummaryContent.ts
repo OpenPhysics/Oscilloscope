@@ -37,11 +37,20 @@ export class OscilloscopeScreenSummaryContent extends ScreenSummaryContent {
     );
 
     // Sentence describing the function-generator source, with live values.
-    const functionGeneratorDetails = new PatternStringProperty(details.functionGeneratorStringProperty, {
-      waveform: waveformNameProperty,
-      frequency: fg.frequencyProperty,
-      amplitude: fg.amplitudeProperty,
-    });
+    //
+    // `decimalPlaces` is required: it defaults to null, which formats the raw
+    // number. The knobs are continuous, so a dragged frequency is a value like
+    // 1018.1409090909092 — fine for the model, but a screen reader would read
+    // every digit aloud. The visible readouts round via formatUnits; these match.
+    const functionGeneratorDetails = new PatternStringProperty(
+      details.functionGeneratorStringProperty,
+      {
+        waveform: waveformNameProperty,
+        frequency: fg.frequencyProperty,
+        amplitude: fg.amplitudeProperty,
+      },
+      { decimalPlaces: { waveform: null, frequency: 0, amplitude: 2 } },
+    );
 
     // Switch between the function-generator sentence and the microphone sentences.
     const currentDetailsProperty = new DerivedProperty(

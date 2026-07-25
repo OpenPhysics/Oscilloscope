@@ -13,14 +13,9 @@
  * clicks it from position to position. No slider UI is shown.
  */
 
-import {
-  DerivedProperty,
-  NumberProperty,
-  type PhetioProperty,
-  Property,
-  type TReadOnlyProperty,
-} from "scenerystack/axon";
+import { DerivedProperty, NumberProperty, Property, type TProperty, type TReadOnlyProperty } from "scenerystack/axon";
 import { clamp, Range, roundSymmetric } from "scenerystack/dot";
+import { optionize } from "scenerystack/phet-core";
 import { Circle, DragListener, Line, Node, type NodeOptions, Text, type TPaint, VBox } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
 import { AccessibleSlider, type AccessibleSliderOptions } from "scenerystack/sun";
@@ -44,9 +39,15 @@ type SelfOptions = {
   readoutFill?: TPaint;
 };
 
-export type RotarySwitchOptions = SelfOptions &
+type ParentOptions = AccessibleSliderOptions &
   Pick<
     NodeOptions,
+    "accessibleName" | "accessibleHelpText" | "enabledProperty" | "visibleProperty" | "cursor" | "scale"
+  >;
+
+export type RotarySwitchOptions = SelfOptions &
+  Pick<
+    ParentOptions,
     "accessibleName" | "accessibleHelpText" | "enabledProperty" | "visibleProperty" | "cursor" | "scale"
   >;
 
@@ -56,7 +57,7 @@ export class RotarySwitch<T> extends AccessibleSliderNode {
   private readonly disposeRotarySwitch: () => void;
 
   public constructor(
-    property: PhetioProperty<T>,
+    property: TProperty<T>,
     items: readonly RotarySwitchItem<T>[],
     providedOptions?: RotarySwitchOptions,
   ) {
@@ -71,36 +72,30 @@ export class RotarySwitch<T> extends AccessibleSliderNode {
     const indexProperty = new NumberProperty(indexForValue(property.value), {
       range: new Range(0, maxIndex),
     });
+    const enabledRangeProperty = new Property(new Range(0, maxIndex));
 
-    const radius = providedOptions?.radius ?? 24;
-    const captionStringProperty = providedOptions?.captionStringProperty ?? null;
-    const textFill = providedOptions?.textFill ?? OscilloscopeColors.textColorProperty;
-    const readoutFill = providedOptions?.readoutFill ?? OscilloscopeColors.textColorProperty;
+    const options = optionize<RotarySwitchOptions, SelfOptions, ParentOptions>()(
+      {
+        radius: 24,
+        captionStringProperty: null,
+        textFill: OscilloscopeColors.textColorProperty,
+        readoutFill: OscilloscopeColors.textColorProperty,
+        // AccessibleSlider, over the switch's internal detent index:
+        valueProperty: indexProperty,
+        enabledRangeProperty,
+        keyboardStep: 1,
+        shiftKeyboardStep: 1,
+        pageKeyboardStep: Math.max(1, Math.floor(count / 4)),
+        constrainValue: (value: number) => clamp(roundSymmetric(value), 0, maxIndex),
+        roundToStepSize: true,
+        cursor: "pointer",
+      },
+      providedOptions,
+    );
 
-    const superOptions: AccessibleSliderOptions & NodeOptions = {
-      valueProperty: indexProperty,
-      enabledRangeProperty: new Property(new Range(0, maxIndex)),
-      keyboardStep: 1,
-      shiftKeyboardStep: 1,
-      pageKeyboardStep: Math.max(1, Math.floor(count / 4)),
-      constrainValue: (value: number) => clamp(roundSymmetric(value), 0, maxIndex),
-      roundToStepSize: true,
-      cursor: "pointer",
-    };
-    if (providedOptions?.accessibleName !== undefined) {
-      superOptions.accessibleName = providedOptions.accessibleName;
-    }
-    if (providedOptions?.accessibleHelpText !== undefined) {
-      superOptions.accessibleHelpText = providedOptions.accessibleHelpText;
-    }
-    if (providedOptions?.enabledProperty !== undefined) {
-      superOptions.enabledProperty = providedOptions.enabledProperty;
-    }
-    if (providedOptions?.visibleProperty !== undefined) {
-      superOptions.visibleProperty = providedOptions.visibleProperty;
-    }
+    const { radius, captionStringProperty, textFill, readoutFill } = options;
 
-    super(superOptions);
+    super(options);
 
     // ── Dial body ─────────────────────────────────────────────────────────────
     const body = new Circle(radius, {
@@ -228,7 +223,9 @@ export class RotarySwitch<T> extends AccessibleSliderNode {
       indexProperty.unlink(indexListener);
       property.unlink(propertyListener);
       readoutStringProperty.dispose();
+      dial.removeInputListener(dragListener);
       dragListener.dispose();
+      enabledRangeProperty.dispose();
       indexProperty.dispose();
     };
   }

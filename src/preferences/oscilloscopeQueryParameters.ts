@@ -17,6 +17,7 @@
 import { logGlobal } from "scenerystack/phet-core";
 import { QueryStringMachine } from "scenerystack/query-string-machine";
 import OscilloscopeNamespace from "../OscilloscopeNamespace.js";
+import { FG_DEFAULT_NOISE_AMPLITUDE, FG_NOISE_AMPLITUDE_RANGE } from "../SimConstants.js";
 
 const oscilloscopeQueryParameters = QueryStringMachine.getAll({
   /**
@@ -43,8 +44,8 @@ const oscilloscopeQueryParameters = QueryStringMachine.getAll({
   /** Startup amplitude of the injected noise, in volts. */
   noiseAmplitude: {
     type: "number",
-    defaultValue: 0.15,
-    isValidValue: (value: number) => value >= 0 && value <= 1,
+    defaultValue: FG_DEFAULT_NOISE_AMPLITUDE,
+    isValidValue: (value: number) => FG_NOISE_AMPLITUDE_RANGE.contains(value),
     public: true,
   },
 });
