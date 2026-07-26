@@ -15,10 +15,12 @@ draggable **measurement cursors** (Δt / 1÷Δt / ΔV), **CSV / PNG export**, Ru
 and live auto-measurements (freq / period / Vpp / Vrms / Vmax / Vmin). Optional signal-noise injection
 is in Preferences.
 
-The defining UI decision: **every panel control is a real-instrument widget — rotary knobs, detented
-rotary switches, and panel buttons — never a slider.** Forked from `OpenPhysics/TemplateSingleSim`,
-it keeps that template's **canonical accessibility** wiring. For multi-screen sims, see
-[`doc/multi-screen.md`](doc/multi-screen.md).
+The defining UI decision: **the scope's own front panel is built from real-instrument widgets —
+rotary knobs, detented rotary switches, and panel buttons, never sliders.** The function generator
+is deliberately the exception: it is a *separate bench instrument* sitting under the CRT, patched in
+over cables, and it uses sliders and a combo box so it reads as a different box rather than more
+scope panel. Forked from `OpenPhysics/TemplateSingleSim`, it keeps that template's **canonical
+accessibility** wiring. For multi-screen sims, see [`doc/multi-screen.md`](doc/multi-screen.md).
 
 ### Simulation architecture
 
@@ -26,13 +28,20 @@ it keeps that template's **canonical accessibility** wiring. For multi-screen si
   over a time window of `effectiveTimePerDiv × HORIZONTAL_DIVISIONS`. The function generator is analytic
   and trigger-aligned (`computeTriggerOffset()` finds the level/slope crossing → stationary display);
   the microphone path pulls the latest `AnalyserNode` data with a level/slope trigger.
-- **Trigger modes are enforced in `refresh()`**: `computeTriggerOffset()` returns `null` when the
-  comparator never fires over a full period, and `auto` free-runs from that, while `normal` and
-  `single` return early so the previous sweep stays frozen. `single` additionally holds once
-  disarmed, so a completed capture does not quietly free-run; taking the capture clears
-  `trigger.armedProperty` and stops the clock. Arming happens on two edges — selecting SINGLE, and
-  `isPlayingProperty` going true (so RUN re-arms). The SINGLE button goes *through* this, not
-  around it.
+- **Trigger modes are enforced in `refresh()`**, which delegates the comparator to
+  `acquireTrigger()`: it returns false when nothing fires over a full period, and `auto` free-runs
+  from that, while `normal` and `single` return early so the previous sweep stays frozen. `single`
+  additionally holds once disarmed, so a completed capture does not quietly free-run; taking the
+  capture clears `trigger.armedProperty` and stops the clock. Arming happens on two edges —
+  selecting SINGLE, and `isPlayingProperty` going true (so RUN re-arms). The front-panel SINGLE key
+  calls `model.captureSingle()`, which goes *through* those edges rather than around them.
+- **The comparator watches what the channel displays, not the raw source.** `triggerViewFor()` maps
+  the front-panel level and slope — which the user sets against the on-screen marker — into the raw
+  signal `computeTriggerOffset()` searches: the displayed trace is `sign · (source − dc)`, so a
+  displayed crossing of `level` is a raw crossing of `sign·level + dc` on the edge `sign` maps it
+  to, and a grounded channel yields no trigger at all. Skipping this is a genuinely confusing bug:
+  an AC-coupled offset signal holds forever in NORMAL with the marker sitting right on the
+  waveform, and an inverted channel fires its "rising" trigger on a visibly falling edge.
 - **Two buffers per channel.** The display draws the noisy trace (what a probe really sees); the
   automatic measurements read a parallel noiseless one. Vmax/Vmin/Vpp are extreme-value statistics,
   so measuring the noisy trace biased Vpp outward by roughly the noise amplitude.
@@ -40,19 +49,51 @@ it keeps that template's **canonical accessibility** wiring. For multi-screen si
  `waveformMean()`), then applies a first-order high-pass (`AC_COUPLING_TIME_CONSTANT` ≈ 10 ms) so
  square-wave tops droop like a real scope. Subtracting a *window* mean is avoided because that
  depends on how many cycles the current time/div shows. GND flattens the channel to zero.
+- **The high-pass is seeded from its closed-form periodic steady state** (`settleAcHighPass()`).
+ The filter is linear, so one whole period of input is an affine map on its state
+ (`y(t+P) = a·y(t) + b`) whose fixed point `b / (1 − a)` *is* the settled output. Marching through
+ the ~5 time-constants the transient really takes cannot be afforded at a fast timebase — 5τ spans
+ thousands of periods — and a period-blind sample budget has to alias the carrier, which left
+ ~30 mV of baseline error at 20 kHz. The closed form costs one period of samples at any frequency
+ and holds the baseline under 1 mV; `a` and `1 − a` are computed via `log1p`/`expm1` because α sits
+ within an ulp of 1 for a fast signal. The aperiodic noise waveform has no steady state and is
+ seeded at rest instead.
 - **Probe ×1/×10** per channel multiplies the effective volts/div used for drawing and ΔV (tip-voltage
  buffers are unchanged), matching a DSO told a ×10 probe is attached.
+- **The microphone's timebase is bounded by its acquisition memory.** An `AnalyserNode` only hands
+ back its most recent `AUDIO_FFT_SIZE` samples (≈ 743 ms at 44.1 kHz), so `enforceMicrophoneTimebase()`
+ clamps time/div to `microphoneMaxTimePerDivision` while a mic is patched, snapping down to the next
+ 1-2-5 detent. Stretching a shorter capture across the graticule instead would silently mislabel the
+ time axis — by 100× at the slowest sweep.
 - **View** redraws in `OscilloscopeScreenView.step()`, but only **resamples** while running — a
   stopped scope freezes the captured buffer, yet still rescales it live when you turn volts/div or
   position, like a real STOP. Redrawing rebuilds a `Shape` per visible trace, so it is gated on a
   `redrawDirty` flag: running always sets it, and while stopped only a change to one of the
   `renderInputs` Properties does. **Anything new that affects drawing must be added to that list**,
   or a stopped scope will show a stale trace.
+- **Persistence keeps a chain of `PERSISTENCE_SWEEPS` past CH1 sweeps**, drawn behind the live trace
+  at linearly decreasing opacity. A single ghost is not enough: the trace is trigger-aligned, so last
+  frame's sweep lands exactly under this one and shows nothing. The chain is what makes the afterglow
+  visible while a knob is being turned. Leaving Y-T clears it, so re-engaging starts from a clean face.
 - The **hardware controls** live in `src/common/controls/`: `RotaryKnob` and `RotarySwitch` are built on
   sun's `AccessibleSlider` trait (keyboard/PDOM for free) but render as knobs/switches; `PanelButton`
   wraps a `RectangularPushButton` with an indicator LED.
 - Run/Stop reuses `common/TimeModel`'s `isPlayingProperty` (no elapsed-time integration needed,
   since the trace is triggered rather than scrolled).
+
+### View teardown
+
+Scenery does not dispose a node's children, unlink its listeners, or dispose the `DerivedProperty`
+instances a component derived from model state — and a link onto anything longer-lived (a model
+Property, a sim-lifetime `ProfileColorProperty`, a localized string Property) keeps the whole
+component subtree reachable. Every view component that links outward therefore collects its teardown
+in a **`DisposalBag`** (`src/common/DisposalBag.ts`) and drains it from `dispose()`.
+
+**`OscilloscopeScreenView` is the exception, and must not have a `dispose()` override**: joist's
+`ScreenView.setPDOMOrder()` throws unconditionally, and `Node.dispose()` clears `pdomOrder` on its
+way out, so any such override throws instead of tearing anything down. Anything needing teardown
+belongs in a child component, which is what the memory-leak suite checks. `memory-leak.test.ts` pins
+that constraint directly so the override does not come back.
 
 ## Key files
 
@@ -71,7 +112,7 @@ it keeps that template's **canonical accessibility** wiring. For multi-screen si
 | `src/oscilloscope-screen/model/AudioInput.ts` | Microphone source via Web Audio `AnalyserNode` (degrades gracefully) |
 | `src/oscilloscope-screen/model/Waveform.ts` | Pure normalized waveform-shape evaluator (incl. pulse/noise) |
 | `src/oscilloscope-screen/model/Spectrum.ts` | Pure Hann-windowed radix-2 FFT for the spectrum (FFT) display mode |
-| `src/oscilloscope-screen/model/SignalSource.ts` | `functionGenerator` \| `audio` union |
+| `src/oscilloscope-screen/model/ChannelInput.ts` | `none` \| `functionGeneratorA` \| `functionGeneratorB` \| `microphone` BNC patch union |
 | `src/common/controls/RotaryKnob.ts` | Continuous accessible knob (scrub drag + `AccessibleSlider` keyboard) |
 | `src/common/controls/RotarySwitch.ts` | Detented accessible selector (generic over value type) |
 | `src/common/controls/PanelButton.ts` | Front-panel push button with optional indicator LED |
@@ -80,8 +121,12 @@ it keeps that template's **canonical accessibility** wiring. For multi-screen si
 | `src/oscilloscope-screen/view/OscilloscopeDisplayNode.ts` | CRT face, graticule, CH1/CH2/math traces, trigger marker, X-Y, FFT, persistence, draggable cursors |
 | `src/oscilloscope-screen/view/MeasurementCursorNode.ts` | One draggable **and keyboard-operable** measurement cursor (`AccessibleSlider`) |
 | `src/oscilloscope-screen/view/CursorReadoutNode.ts` | On-screen Δt / 1÷Δt / ΔV cursor readout overlay |
+| `src/oscilloscope-screen/view/PatchCableLayer.ts` | The five jack nodes + drag-to-connect patch cables between them |
+| `src/oscilloscope-screen/view/BncJackNode.ts` | One BNC-style jack (source output or channel input) |
+| `src/oscilloscope-screen/view/measurementUtils.ts` | Pure estimators: frequency, duty, rise/fall, phase, `nearestStep` |
 | `src/common/downloadFile.ts` | Browser CSV / PNG download helpers (used by trace export) |
-| `src/oscilloscope-screen/view/SignalGeneratorPanel.ts` | Source + waveform switches, freq/ampl/offset/duty/phase knobs |
+| `src/common/DisposalBag.ts` | Teardown collector every disposable view component drains in `dispose()` |
+| `src/oscilloscope-screen/view/SignalGeneratorPanel.ts` | Waveform combo + freq/ampl/offset/duty/phase sliders, mic status, source jacks |
 | `src/oscilloscope-screen/view/VerticalControlPanel.ts` | Per-channel volts/div, position, coupling, invert, on/off |
 | `src/oscilloscope-screen/view/HorizontalControlPanel.ts` | Time/div, position, ×10 magnify, X-Y |
 | `src/oscilloscope-screen/view/TriggerControlPanel.ts` | Trigger source / level / slope / mode |
@@ -199,7 +244,9 @@ Fleet-standard Vitest layout (keep when forking):
 | `vitest.config.ts` | `happy-dom` environment; `setupFiles: ["./tests/setup.ts"]`; `execArgv: ["--expose-gc"]` |
 | `tests/setup.ts` | Canvas / AudioContext mocks + `init({ name: "…" })` before SceneryStack imports |
 | `tests/TimeModel.test.ts` | Sample model unit tests — replace with real physics tests |
-| `tests/memory-leak.test.ts` | WeakRef + `forceGC` dispose regression — models **and** the view components with real teardown (`OscilloscopeDisplayNode`, `MeasurementCursorNode`, `RotaryKnob`, `RotarySwitch`) |
+| `tests/memory-leak.test.ts` | WeakRef + `forceGC` dispose regression — models **and** every view component with real teardown (display node, cursors, knobs/switches, patch layer, BNC jacks, both readouts, all five panels) |
+| `tests/OscilloscopeScreenView.test.ts` | Which frequency the readout reports, phase-row dashing, persistence chain |
+| `tests/AudioInput.test.ts` | Microphone capture geometry against a stub `AnalyserNode` |
 | `tests/fuzz/fuzz.spec.ts` | Optional Playwright fuzz smoke via joist `?fuzz` |
 | `playwright.config.ts` | Chromium project + Vite webServer for fuzz |
 
@@ -209,10 +256,17 @@ Fleet-standard Vitest layout (keep when forking):
 - Expand `memory-leak.test.ts` for any component that adds/removes nodes or links Properties at
   runtime (see OpticsLab for a deep suite). The view cases construct their component against a model
   that **outlives** it, so a missed `unlink` keeps the component reachable and fails the assertion.
+- **Build the component the way the panels build it.** These cases only catch what they exercise:
+  the `RotaryKnob` case used to pass a bare knob with no caption or readout — the one configuration
+  no panel actually uses — so it covered none of the `Text` children a real knob carries.
 - The numerics tests assert **accuracy against known-good values**, not just structure:
   `measurementUtils.test.ts` pins the frequency estimator to <1% error (it used to be quantized to
-  1/windowSeconds), and `OscilloscopeModel.test.ts` pins AC-coupled baseline stability across
-  time/div and the noiseless measurement trace. Keep that style when touching the math.
+  1/windowSeconds), and `OscilloscopeModel.test.ts` pins the AC-coupled baseline under 1 mV across
+  the whole timebase range (including the fastest sweeps, where a period-blind filter warm-up used
+  to leave ~30 mV) while still requiring visible droop near the coupling corner. Keep that style
+  when touching the math.
+- Trigger tests assert against **what is drawn**, not what the generator produces — an AC-coupled or
+  inverted channel is exactly where the two diverge.
 - Optional: `npm run test:fuzz` / `test:fuzz:quick` (not part of default CI).
 
 ## Commands

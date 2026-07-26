@@ -141,11 +141,27 @@ export type ProbeFactor = (typeof SCOPE_PROBE_FACTORS)[number];
 export const AC_COUPLING_TIME_CONSTANT = 0.01; // s
 
 /**
+ * Samples used to step the AC high-pass across one signal period when solving for
+ * its periodic steady state (see `settleAcHighPass` in OscilloscopeModel). This
+ * only needs to resolve one period of the waveform's shape, not the filter's
+ * multi-period settling, which is solved in closed form.
+ */
+export const AC_STEADY_STATE_SAMPLES = 512;
+
+/**
  * Samples used to scan one waveform period for the trigger crossing. The crossing
  * is then refined by linear interpolation, so this only bounds how narrow a
  * feature (e.g. a very low duty-cycle pulse) can be and still be found.
  */
 export const TRIGGER_SEARCH_STEPS = 512;
+
+/**
+ * How many previous sweeps linger as fading "afterglow" ghosts when persistence is
+ * engaged. A single ghost is invisible on a trigger-stationary trace (it lands
+ * exactly under the live one), so the ghost chain has to be deep enough to show
+ * the trace's recent history while a control is being turned.
+ */
+export const PERSISTENCE_SWEEPS = 8;
 
 /** Keyboard step sizes for the draggable measurement cursors, in divisions. */
 export const CURSOR_KEYBOARD_STEP = 0.1;
@@ -158,8 +174,17 @@ export const CURSOR_TIME_RANGE = new Range(0, HORIZONTAL_DIVISIONS); // div
 /** Travel of the voltage cursors, in divisions above/below screen center. */
 export const CURSOR_VOLT_RANGE = new Range(-VERTICAL_DIVISIONS / 2, VERTICAL_DIVISIONS / 2); // div
 
-/** Size of the microphone analyser FFT window (power of two, per Web Audio spec). */
-export const AUDIO_FFT_SIZE = 2048;
+/**
+ * Size of the microphone analyser FFT window (power of two, per Web Audio spec).
+ *
+ * This is also the scope's acquisition memory for the microphone: an `AnalyserNode`
+ * hands back exactly this many of the most recent samples, so it bounds the longest
+ * sweep the mic can honestly fill — `fftSize / sampleRate` seconds, ≈ 743 ms at
+ * 44.1 kHz. 32768 is the maximum the Web Audio spec allows, and the model clamps
+ * the timebase to match (see `microphoneMaxTimePerDivision`) rather than stretching
+ * a shorter capture across a graticule that claims more time than it holds.
+ */
+export const AUDIO_FFT_SIZE = 32768;
 
 OscilloscopeNamespace.register("SimConstants", {
   SCREEN_VIEW_MARGIN,

@@ -10,6 +10,7 @@ import { HBox, type Node, VBox } from "scenerystack/scenery";
 import { PanelButton } from "../../common/controls/PanelButton.js";
 import { RotaryKnob } from "../../common/controls/RotaryKnob.js";
 import { RotarySwitch } from "../../common/controls/RotarySwitch.js";
+import { DisposalBag } from "../../common/DisposalBag.js";
 import { SimPanel } from "../../common/SimPanel.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import { SCOPE_HORIZONTAL_POSITION_RANGE, SCOPE_TIME_PER_DIV_STEPS } from "../../SimConstants.js";
@@ -21,15 +22,19 @@ import { withSectionHeader } from "./panelSection.js";
 export class HorizontalControlPanel extends SimPanel {
   public readonly controlsInOrder: Node[];
 
+  private readonly bag: DisposalBag;
+
   public constructor(model: OscilloscopeModel) {
+    const bag = new DisposalBag();
     const strings = StringManager.getInstance();
     const h = strings.getHorizontal();
     const a11y = strings.getA11yStrings().controls;
 
+    const positionReadoutProperty = derivedString(model.horizontalPositionProperty, formatDivisions);
     const positionKnob = new RotaryKnob(model.horizontalPositionProperty, SCOPE_HORIZONTAL_POSITION_RANGE, {
       radius: 18,
       captionStringProperty: h.positionStringProperty,
-      valueStringProperty: derivedString(model.horizontalPositionProperty, formatDivisions),
+      valueStringProperty: positionReadoutProperty,
       accessibleName: a11y.horizontalPositionStringProperty,
     });
 
@@ -54,9 +59,10 @@ export class HorizontalControlPanel extends SimPanel {
       fontSize: 11,
     });
 
+    const xyActiveProperty = new DerivedProperty([model.displayModeProperty], (m) => m === "xy");
     const xyButton = new PanelButton({
       labelStringProperty: h.xyModeStringProperty,
-      indicatorProperty: new DerivedProperty([model.displayModeProperty], (m) => m === "xy"),
+      indicatorProperty: xyActiveProperty,
       accessibleName: a11y.xyModeStringProperty,
       listener: () => {
         model.displayModeProperty.value = model.displayModeProperty.value === "xy" ? "yt" : "xy";
@@ -74,8 +80,16 @@ export class HorizontalControlPanel extends SimPanel {
       ],
     });
 
-    super(withSectionHeader(h.titleStringProperty, body), { xMargin: 10, yMargin: 8 });
+    super(withSectionHeader(h.titleStringProperty, body, { bag }), { xMargin: 10, yMargin: 8 });
+
+    this.bag = bag;
+    this.bag.own(positionKnob, timeSwitch, magButton, xyButton, positionReadoutProperty, xyActiveProperty);
 
     this.controlsInOrder = [positionKnob, timeSwitch, magButton, xyButton];
+  }
+
+  public override dispose(): void {
+    this.bag.dispose();
+    super.dispose();
   }
 }

@@ -22,6 +22,7 @@ import {
   DIVISION_SIZE,
   HORIZONTAL_DIVISIONS,
   PANEL_CORNER_RADIUS,
+  PERSISTENCE_SWEEPS,
   SCOPE_TRIGGER_LEVEL_RANGE,
   TRACE_SAMPLE_COUNT,
   VERTICAL_DIVISIONS,
@@ -48,8 +49,8 @@ const FACE_LINE_WIDTH = 3;
 const TRACE_LINE_WIDTH = 2;
 /** Stroke width of the graticule grid, axes, and cursor/trigger lines, in screen pixels. */
 const THIN_LINE_WIDTH = 1;
-/** Opacity of the persistence "afterglow" ghost of the previous CH1 sweep. */
-const PERSISTENCE_GHOST_OPACITY = 0.28;
+/** Opacity of the freshest persistence "afterglow" ghost; older ones fade from here. */
+const PERSISTENCE_GHOST_OPACITY = 0.34;
 /** How far (px) a trace may be drawn past the display edge before it is clipped. */
 const TRACE_CLIP_MARGIN = 2;
 /** Dash pattern (px on, px off) for the dashed trigger-level line. */
@@ -72,12 +73,19 @@ export class OscilloscopeDisplayNode extends Node {
   private readonly mathPath: Path;
   private readonly xyPath: Path;
   private readonly fftPath: Path;
-  private readonly ghostPath: Path;
+  private readonly ghostPaths: Path[];
   private readonly triggerMarker: Node;
   private readonly triggerLine: Path;
   private readonly cursorLayer: Node;
 
-  private previousCh1Shape: Shape | null = null;
+  /**
+   * Recent CH1 sweeps, newest first, drawn behind the live trace at decreasing
+   * opacity. A single ghost would be invisible: the trace is trigger-aligned, so
+   * last frame's sweep lands exactly under this one. A chain deep enough to span
+   * a fraction of a second is what makes the afterglow show the trace's recent
+   * history while a knob is being turned.
+   */
+  private readonly ghostShapes: (Shape | null)[] = new Array<Shape | null>(PERSISTENCE_SWEEPS).fill(null);
 
   // Reused FFT working buffers, so the spectrum mode does not allocate three typed
   // arrays on every animation frame.
@@ -144,12 +152,17 @@ export class OscilloscopeDisplayNode extends Node {
     this.ownedChildren.push(axisPath);
 
     // ── Trace layer (clipped to the CRT face) ─────────────────────────────────
-    this.ghostPath = new Path(null, {
-      stroke: OscilloscopeColors.channel1ColorProperty,
-      lineWidth: TRACE_LINE_WIDTH,
-      opacity: PERSISTENCE_GHOST_OPACITY,
-      lineJoin: "round",
-    });
+    // Index 0 holds the freshest ghost and fades linearly with age.
+    this.ghostPaths = Array.from(
+      { length: PERSISTENCE_SWEEPS },
+      (_, age) =>
+        new Path(null, {
+          stroke: OscilloscopeColors.channel1ColorProperty,
+          lineWidth: TRACE_LINE_WIDTH,
+          opacity: PERSISTENCE_GHOST_OPACITY * (1 - age / PERSISTENCE_SWEEPS),
+          lineJoin: "round",
+        }),
+    );
     this.ch1Path = new Path(null, {
       stroke: OscilloscopeColors.channel1ColorProperty,
       lineWidth: TRACE_LINE_WIDTH,
@@ -181,13 +194,21 @@ export class OscilloscopeDisplayNode extends Node {
       lineCap: "round",
     });
     const traceLayer = new Node({
-      children: [this.ghostPath, this.mathPath, this.ch2Path, this.ch1Path, this.xyPath, this.fftPath],
+      children: [
+        // Oldest ghost furthest back, so the freshest sweep reads brightest.
+        ...[...this.ghostPaths].reverse(),
+        this.mathPath,
+        this.ch2Path,
+        this.ch1Path,
+        this.xyPath,
+        this.fftPath,
+      ],
       clipArea: Shape.rect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT),
     });
     this.addChild(traceLayer);
     this.ownedChildren.push(
       traceLayer,
-      this.ghostPath,
+      ...this.ghostPaths,
       this.mathPath,
       this.ch2Path,
       this.ch1Path,
@@ -295,42 +316,52 @@ export class OscilloscopeDisplayNode extends Node {
 
   /** Redraws every trace and the trigger marker from current model state. */
   public update(): void {
-    const model = this.model;
-    const mode = model.displayModeProperty.value;
-
+    const mode = this.model.displayModeProperty.value;
     if (mode === "xy") {
-      this.ch1Path.shape = null;
-      this.ch2Path.shape = null;
-      this.mathPath.shape = null;
-      this.ghostPath.shape = null;
-      this.fftPath.shape = null;
-      this.xyPath.shape = this.buildXYShape();
-      this.triggerMarker.visible = false;
-      this.cursorLayer.visible = false;
-      return;
+      this.updateXY();
+    } else if (mode === "fft") {
+      this.updateFFT();
+    } else {
+      this.updateYT();
     }
+  }
 
-    if (mode === "fft") {
-      this.ch1Path.shape = null;
-      this.ch2Path.shape = null;
-      this.mathPath.shape = null;
-      this.ghostPath.shape = null;
-      this.xyPath.shape = null;
-      this.fftPath.shape = this.buildFFTShape();
-      this.triggerMarker.visible = false;
-      const cursorsOn = model.cursorsEnabledProperty.value;
-      this.cursorLayer.visible = cursorsOn;
-      // Frequency cursors reuse the vertical (time) cursor lines; hide the voltage pair.
-      const [time1, time2, volt1, volt2] = this.cursorsInOrder;
-      if (time1 && time2 && volt1 && volt2) {
-        time1.visible = cursorsOn;
-        time2.visible = cursorsOn;
-        volt1.visible = false;
-        volt2.visible = false;
-      }
-      return;
+  /** Clears every Y-T trace, for the modes that draw something else entirely. */
+  private clearYTTraces(): void {
+    this.ch1Path.shape = null;
+    this.ch2Path.shape = null;
+    this.mathPath.shape = null;
+    this.clearPersistence();
+  }
+
+  private updateXY(): void {
+    this.clearYTTraces();
+    this.fftPath.shape = null;
+    this.xyPath.shape = this.buildXYShape();
+    this.triggerMarker.visible = false;
+    this.cursorLayer.visible = false;
+  }
+
+  private updateFFT(): void {
+    this.clearYTTraces();
+    this.xyPath.shape = null;
+    this.fftPath.shape = this.buildFFTShape();
+    this.triggerMarker.visible = false;
+
+    const cursorsOn = this.model.cursorsEnabledProperty.value;
+    this.cursorLayer.visible = cursorsOn;
+    // Frequency cursors reuse the vertical (time) cursor lines; hide the voltage pair.
+    const [time1, time2, volt1, volt2] = this.cursorsInOrder;
+    if (time1 && time2 && volt1 && volt2) {
+      time1.visible = cursorsOn;
+      time2.visible = cursorsOn;
+      volt1.visible = false;
+      volt2.visible = false;
     }
+  }
 
+  private updateYT(): void {
+    const model = this.model;
     this.xyPath.shape = null;
     this.fftPath.shape = null;
     this.triggerMarker.visible = true;
@@ -339,44 +370,59 @@ export class OscilloscopeDisplayNode extends Node {
       cursor.visible = true;
     }
 
-    // Persistence: keep the last CH1 sweep as a faded ghost.
-    if (model.persistenceProperty.value) {
-      this.ghostPath.shape = this.previousCh1Shape;
-    } else {
-      this.ghostPath.shape = null;
-    }
-
-    if (model.ch1.enabledProperty.value) {
-      const shape = this.buildChannelShape(model.ch1Trace, model.ch1);
-      this.ch1Path.shape = shape;
-      this.previousCh1Shape = shape;
-    } else {
-      this.ch1Path.shape = null;
-    }
-
+    this.ch1Path.shape = model.ch1.enabledProperty.value ? this.buildChannelShape(model.ch1Trace, model.ch1) : null;
     this.ch2Path.shape = model.ch2.enabledProperty.value ? this.buildChannelShape(model.ch2Trace, model.ch2) : null;
+    this.mathPath.shape = model.mathModeProperty.value !== "off" ? this.buildMathShape() : null;
 
-    // Math trace, scaled with CH1's sensitivity and drawn about screen center.
-    if (model.mathModeProperty.value !== "off") {
-      const pxPerVolt = this.pixelsPerVolt(model.ch1);
-      const n = model.mathTrace.length;
-      const shape = new Shape();
-      for (let i = 0; i < n; i++) {
-        const x = (i / (n - 1)) * DISPLAY_WIDTH;
-        const raw = CENTER_Y - (model.mathTrace[i] ?? 0) * pxPerVolt;
-        const y = Math.max(-TRACE_CLIP_MARGIN, Math.min(DISPLAY_HEIGHT + TRACE_CLIP_MARGIN, raw));
-        if (i === 0) {
-          shape.moveTo(x, y);
-        } else {
-          shape.lineTo(x, y);
-        }
-      }
-      this.mathPath.shape = shape;
-    } else {
-      this.mathPath.shape = null;
-    }
-
+    this.updatePersistence(this.ch1Path.shape);
     this.updateTriggerMarker();
+  }
+
+  /** Ages the afterglow chain by one sweep and repaints the ghosts. */
+  private updatePersistence(liveShape: Shape | null): void {
+    if (!this.model.persistenceProperty.value) {
+      this.clearPersistence();
+      return;
+    }
+    if (liveShape) {
+      this.ghostShapes.pop();
+      this.ghostShapes.unshift(liveShape);
+    }
+    for (let age = 0; age < this.ghostPaths.length; age++) {
+      const path = this.ghostPaths[age];
+      if (path) {
+        // The freshest retained sweep lands exactly under the live trace, so the
+        // visible afterglow starts one sweep further back.
+        path.shape = this.ghostShapes[age + 1] ?? null;
+      }
+    }
+  }
+
+  /** The CH1±CH2 math trace, scaled with CH1's sensitivity about screen center. */
+  private buildMathShape(): Shape {
+    const model = this.model;
+    const pxPerVolt = this.pixelsPerVolt(model.ch1);
+    const n = model.mathTrace.length;
+    const shape = new Shape();
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * DISPLAY_WIDTH;
+      const raw = CENTER_Y - (model.mathTrace[i] ?? 0) * pxPerVolt;
+      const y = Math.max(-TRACE_CLIP_MARGIN, Math.min(DISPLAY_HEIGHT + TRACE_CLIP_MARGIN, raw));
+      if (i === 0) {
+        shape.moveTo(x, y);
+      } else {
+        shape.lineTo(x, y);
+      }
+    }
+    return shape;
+  }
+
+  /** Drops every retained sweep, so re-engaging persistence starts from a clean face. */
+  private clearPersistence(): void {
+    this.ghostShapes.fill(null);
+    for (const path of this.ghostPaths) {
+      path.shape = null;
+    }
   }
 
   /** Positions the trigger marker at the current trigger level. */

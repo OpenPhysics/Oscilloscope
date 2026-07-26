@@ -11,6 +11,7 @@ import { HBox, type Node, VBox } from "scenerystack/scenery";
 import { PanelButton } from "../../common/controls/PanelButton.js";
 import { RotaryKnob } from "../../common/controls/RotaryKnob.js";
 import { RotarySwitch } from "../../common/controls/RotarySwitch.js";
+import { DisposalBag } from "../../common/DisposalBag.js";
 import { SimPanel } from "../../common/SimPanel.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import { SCOPE_TRIGGER_LEVEL_RANGE } from "../../SimConstants.js";
@@ -23,7 +24,10 @@ import { withSectionHeader } from "./panelSection.js";
 export class TriggerControlPanel extends SimPanel {
   public readonly controlsInOrder: Node[];
 
+  private readonly bag: DisposalBag;
+
   public constructor(model: OscilloscopeModel) {
+    const bag = new DisposalBag();
     const strings = StringManager.getInstance();
     const t = strings.getTrigger();
     const a11y = strings.getA11yStrings().controls;
@@ -35,19 +39,23 @@ export class TriggerControlPanel extends SimPanel {
       { radius: 18, captionStringProperty: t.sourceStringProperty, accessibleName: a11y.triggerSourceStringProperty },
     );
 
+    const levelReadoutProperty = derivedString(trigger.levelProperty, formatVoltage);
     const levelKnob = new RotaryKnob(trigger.levelProperty, SCOPE_TRIGGER_LEVEL_RANGE, {
       radius: 22,
       captionStringProperty: t.levelStringProperty,
-      valueStringProperty: derivedString(trigger.levelProperty, formatVoltage),
+      valueStringProperty: levelReadoutProperty,
       accessibleName: a11y.triggerLevelStringProperty,
       keyboardStep: 0.1,
       shiftKeyboardStep: 0.01,
       pageKeyboardStep: 1,
     });
 
+    // Every string this label interpolates has to be a dependency, including the
+    // "Slope" caption itself — reading it as `.value` inside the derivation would
+    // leave the caption stale in the old locale after a runtime language switch.
     const slopeLabelProperty = new DerivedProperty(
-      [trigger.slopeProperty, t.risingStringProperty, t.fallingStringProperty],
-      (slope, rising, falling) => `${t.slopeStringProperty.value}: ${slope === "rising" ? rising : falling}`,
+      [trigger.slopeProperty, t.slopeStringProperty, t.risingStringProperty, t.fallingStringProperty],
+      (slope, slopeLabel, rising, falling) => `${slopeLabel}: ${slope === "rising" ? rising : falling}`,
     );
     const slopeButton = new PanelButton({
       labelStringProperty: slopeLabelProperty,
@@ -74,8 +82,16 @@ export class TriggerControlPanel extends SimPanel {
       children: [new HBox({ spacing: 14, align: "top", children: [sourceSwitch, levelKnob, modeSwitch] }), slopeButton],
     });
 
-    super(withSectionHeader(t.titleStringProperty, body));
+    super(withSectionHeader(t.titleStringProperty, body, { bag }));
+
+    this.bag = bag;
+    this.bag.own(sourceSwitch, levelKnob, slopeButton, modeSwitch, slopeLabelProperty, levelReadoutProperty);
 
     this.controlsInOrder = [sourceSwitch, levelKnob, slopeButton, modeSwitch];
+  }
+
+  public override dispose(): void {
+    this.bag.dispose();
+    super.dispose();
   }
 }

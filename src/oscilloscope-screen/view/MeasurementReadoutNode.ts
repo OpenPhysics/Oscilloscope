@@ -13,6 +13,7 @@
 import { DerivedProperty, type TReadOnlyProperty } from "scenerystack/axon";
 import { GridBox, Rectangle, Text } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
+import { DisposalBag } from "../../common/DisposalBag.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
 import {
@@ -47,15 +48,24 @@ export type MeasurementProperties = {
 };
 
 export class MeasurementReadoutNode extends Rectangle {
+  private readonly bag: DisposalBag;
+
   public constructor(measurements: MeasurementProperties, showMeasurementsProperty: TReadOnlyProperty<boolean>) {
+    const bag = new DisposalBag();
     const m = StringManager.getInstance().getMeasurements();
     const none = m.noneStringProperty;
 
-    const valueText = (property: TReadOnlyProperty<string>): Text =>
-      new Text(property, { font: READOUT_FONT, fill: OscilloscopeColors.displayReadoutColorProperty });
+    const valueText = (property: TReadOnlyProperty<string>): Text => {
+      const text = new Text(property, { font: READOUT_FONT, fill: OscilloscopeColors.displayReadoutColorProperty });
+      bag.own(text);
+      return text;
+    };
 
-    const labelText = (property: TReadOnlyProperty<string>): Text =>
-      new Text(property, { font: READOUT_FONT, fill: OscilloscopeColors.displayReadoutColorProperty });
+    const labelText = (property: TReadOnlyProperty<string>): Text => {
+      const text = new Text(property, { font: READOUT_FONT, fill: OscilloscopeColors.displayReadoutColorProperty });
+      bag.own(text);
+      return text;
+    };
 
     const freqString = new DerivedProperty([measurements.frequencyProperty, none], (hz, dash) =>
       hz > 0 ? formatFrequency(hz) : dash,
@@ -81,9 +91,23 @@ export class MeasurementReadoutNode extends Rectangle {
       deg >= 0 ? formatDegrees(deg) : dash,
     );
 
+    bag.own(
+      freqString,
+      periodString,
+      vppString,
+      vrmsString,
+      vmaxString,
+      vminString,
+      dutyString,
+      riseString,
+      fallString,
+      meanString,
+      phaseString,
+    );
+
     const phaseLabel = labelText(m.phaseStringProperty);
     const phaseValue = valueText(phaseString);
-    measurements.showPhaseProperty.link((show) => {
+    bag.link(measurements.showPhaseProperty, (show) => {
       phaseLabel.visible = show;
       phaseValue.visible = show;
     });
@@ -115,5 +139,13 @@ export class MeasurementReadoutNode extends Rectangle {
     grid.left = READOUT_INSET;
     grid.centerY = this.rectHeight / 2;
     this.addChild(grid);
+
+    this.bag = bag;
+    this.bag.own(grid);
+  }
+
+  public override dispose(): void {
+    this.bag.dispose();
+    super.dispose();
   }
 }

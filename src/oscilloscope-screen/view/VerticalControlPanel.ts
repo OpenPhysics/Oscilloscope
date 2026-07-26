@@ -12,6 +12,7 @@ import { PhetFont } from "scenerystack/scenery-phet";
 import { PanelButton } from "../../common/controls/PanelButton.js";
 import { RotaryKnob } from "../../common/controls/RotaryKnob.js";
 import { RotarySwitch } from "../../common/controls/RotarySwitch.js";
+import { DisposalBag } from "../../common/DisposalBag.js";
 import { SimPanel } from "../../common/SimPanel.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
@@ -44,7 +45,10 @@ export type VerticalControlPanelOptions = {
 export class VerticalControlPanel extends SimPanel {
   public readonly controlsInOrder: Node[] = [];
 
+  private readonly bag: DisposalBag;
+
   public constructor(model: OscilloscopeModel, options: VerticalControlPanelOptions) {
+    const bag = new DisposalBag();
     const strings = StringManager.getInstance();
     const v = strings.getVertical();
     const trig = strings.getTrigger();
@@ -96,9 +100,10 @@ export class VerticalControlPanel extends SimPanel {
         return `${math}: ${off}`;
       },
     );
+    const mathActiveProperty = new DerivedProperty([model.mathModeProperty], (mode) => mode !== "off");
     const mathButton = new PanelButton({
       labelStringProperty: mathLabelProperty,
-      indicatorProperty: new DerivedProperty([model.mathModeProperty], (mode) => mode !== "off"),
+      indicatorProperty: mathActiveProperty,
       indicatorColor: OscilloscopeColors.mathTraceColorProperty,
       accessibleName: a11y.mathStringProperty,
       listener: () => {
@@ -112,9 +117,10 @@ export class VerticalControlPanel extends SimPanel {
       fontSize: 11,
     });
 
+    const fftActiveProperty = new DerivedProperty([model.displayModeProperty], (m) => m === "fft");
     const fftButton = new PanelButton({
       labelStringProperty: acq.fftStringProperty,
-      indicatorProperty: new DerivedProperty([model.displayModeProperty], (m) => m === "fft"),
+      indicatorProperty: fftActiveProperty,
       accessibleName: a11y.fftStringProperty,
       listener: () => {
         model.displayModeProperty.value = model.displayModeProperty.value === "fft" ? "yt" : "fft";
@@ -135,7 +141,7 @@ export class VerticalControlPanel extends SimPanel {
       ],
     });
 
-    super(withSectionHeader(v.titleStringProperty, body), { xMargin: 10, yMargin: 8 });
+    super(withSectionHeader(v.titleStringProperty, body, { bag }), { xMargin: 10, yMargin: 8 });
 
     this.controlsInOrder.push(
       ...column1.order,
@@ -145,6 +151,15 @@ export class VerticalControlPanel extends SimPanel {
       options.ch1Bnc,
       options.ch2Bnc,
     );
+
+    this.bag = bag;
+    // The BNC jacks belong to the patch layer, which disposes them itself.
+    this.bag.own(column1, column2, mathButton, fftButton, mathLabelProperty, mathActiveProperty, fftActiveProperty);
+  }
+
+  public override dispose(): void {
+    this.bag.dispose();
+    super.dispose();
   }
 }
 
@@ -152,19 +167,23 @@ export class VerticalControlPanel extends SimPanel {
 class VerticalControlPanelColumn extends VBox {
   public readonly order: Node[];
 
+  private readonly bag: DisposalBag;
+
   public constructor(
     channel: Channel,
     color: TPaint,
     headingStringProperty: TReadOnlyProperty<string>,
     a11y: ChannelA11y,
   ) {
+    const bag = new DisposalBag();
     const strings = StringManager.getInstance();
     const v = strings.getVertical();
 
+    const positionReadoutProperty = derivedString(channel.positionProperty, formatDivisions);
     const positionKnob = new RotaryKnob(channel.positionProperty, SCOPE_POSITION_RANGE, {
       radius: 18,
       captionStringProperty: v.positionStringProperty,
-      valueStringProperty: derivedString(channel.positionProperty, formatDivisions),
+      valueStringProperty: positionReadoutProperty,
       accessibleName: a11y.position,
     });
 
@@ -179,14 +198,18 @@ class VerticalControlPanelColumn extends VBox {
       minWidth: 52,
     });
 
-    const voltsSwitch = new RotarySwitch(
-      channel.voltsPerDivisionProperty,
-      SCOPE_VOLTS_PER_DIV_STEPS.map((value) => ({
-        value,
-        stringProperty: new DerivedProperty([channel.probeProperty], (probe) => formatVoltsPerDiv(value * probe)),
-      })),
-      { radius: 20, captionStringProperty: v.voltsPerDivisionStringProperty, accessibleName: a11y.voltsPerDivision },
-    );
+    // Each detent's label follows the probe switch, so the dial reads in the same
+    // tip-referenced volts as the trace and the cursors.
+    const voltsItems = SCOPE_VOLTS_PER_DIV_STEPS.map((value) => {
+      const stringProperty = new DerivedProperty([channel.probeProperty], (probe) => formatVoltsPerDiv(value * probe));
+      bag.own(stringProperty);
+      return { value, stringProperty };
+    });
+    const voltsSwitch = new RotarySwitch(channel.voltsPerDivisionProperty, voltsItems, {
+      radius: 20,
+      captionStringProperty: v.voltsPerDivisionStringProperty,
+      accessibleName: a11y.voltsPerDivision,
+    });
 
     const probeSwitch = new RotarySwitch(
       channel.probeProperty,
@@ -215,20 +238,22 @@ class VerticalControlPanelColumn extends VBox {
       fontSize: 11,
     });
 
+    const heading = new Text(headingStringProperty, { font: CHANNEL_FONT, fill: color });
+
     super({
       align: "center",
       spacing: 6,
-      children: [
-        new Text(headingStringProperty, { font: CHANNEL_FONT, fill: color }),
-        positionKnob,
-        menuButton,
-        voltsSwitch,
-        probeSwitch,
-        couplingSwitch,
-        invertButton,
-      ],
+      children: [heading, positionKnob, menuButton, voltsSwitch, probeSwitch, couplingSwitch, invertButton],
     });
 
     this.order = [positionKnob, menuButton, voltsSwitch, probeSwitch, couplingSwitch, invertButton];
+
+    this.bag = bag;
+    this.bag.own(heading, positionReadoutProperty, ...this.order);
+  }
+
+  public override dispose(): void {
+    this.bag.dispose();
+    super.dispose();
   }
 }

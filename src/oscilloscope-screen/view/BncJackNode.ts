@@ -11,6 +11,7 @@ import { DerivedProperty, type TReadOnlyProperty } from "scenerystack/axon";
 import type { Vector2 } from "scenerystack/dot";
 import { Circle, FireListener, Node, type NodeOptions, Text, type TPaint, VBox } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
+import { DisposalBag } from "../../common/DisposalBag.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
 
 export type BncJackNodeOptions = {
@@ -32,6 +33,7 @@ export type BncJackNodeOptions = {
 
 export class BncJackNode extends Node {
   private readonly body: Node;
+  private readonly bag = new DisposalBag();
 
   public constructor(options: BncJackNodeOptions) {
     const radius = options.radius ?? 14;
@@ -84,11 +86,20 @@ export class BncJackNode extends Node {
     const fireListener = new FireListener({
       fire: () => options.onActivate(),
     });
-    this.addInputListener(fireListener);
+    this.bag.addInputListener(this, fireListener);
+    // `ringFill` links the connected-state Property (which the patch layer derives
+    // from model state) and two sim-lifetime color Properties; the Texts and Circles
+    // hold color/string listeners of their own. None are released by Node.dispose().
+    this.bag.own(ringFill, outer, inner, pin, body, label);
   }
 
   /** Global coordinates of the jack pin (for drawing cables). */
   public getJackGlobalCenter(): Vector2 {
     return this.localToGlobalPoint(this.body.center);
+  }
+
+  public override dispose(): void {
+    this.bag.dispose();
+    super.dispose();
   }
 }

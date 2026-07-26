@@ -9,6 +9,7 @@
 import { DerivedProperty, type TReadOnlyProperty } from "scenerystack/axon";
 import { GridBox, Node, Rectangle, Text } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
+import { DisposalBag } from "../../common/DisposalBag.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
 import {
@@ -36,11 +37,17 @@ export type CursorMeasurements = {
 };
 
 export class CursorReadoutNode extends Rectangle {
+  private readonly bag: DisposalBag;
+
   public constructor(measurements: CursorMeasurements, visibleProperty: TReadOnlyProperty<boolean>) {
+    const bag = new DisposalBag();
     const m = StringManager.getInstance().getMeasurements();
 
-    const text = (property: TReadOnlyProperty<string>): Text =>
-      new Text(property, { font: READOUT_FONT, fill: OscilloscopeColors.cursorColorProperty });
+    const text = (property: TReadOnlyProperty<string>): Text => {
+      const node = new Text(property, { font: READOUT_FONT, fill: OscilloscopeColors.cursorColorProperty });
+      bag.own(node);
+      return node;
+    };
 
     const dtString = new DerivedProperty([measurements.deltaTimeProperty, m.noneStringProperty], (s, dash) =>
       s > 0 ? formatPeriod(s) : dash,
@@ -102,5 +109,25 @@ export class CursorReadoutNode extends Rectangle {
     stack.left = READOUT_INSET;
     stack.centerY = this.rectHeight / 2;
     this.addChild(stack);
+
+    this.bag = bag;
+    this.bag.own(
+      dtString,
+      freqString,
+      dvString,
+      f1String,
+      f2String,
+      dfString,
+      ytVisible,
+      fftVisible,
+      ytGrid,
+      fftGrid,
+      stack,
+    );
+  }
+
+  public override dispose(): void {
+    this.bag.dispose();
+    super.dispose();
   }
 }

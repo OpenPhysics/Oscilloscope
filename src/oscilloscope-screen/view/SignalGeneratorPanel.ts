@@ -13,10 +13,11 @@ import {
   type TProperty,
   type TReadOnlyProperty,
 } from "scenerystack/axon";
-import { Dimension2, Range } from "scenerystack/dot";
+import { clamp, Dimension2, Range } from "scenerystack/dot";
 import { HBox, Node, Text, VBox } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
 import { ComboBox, type ComboBoxItem, HSlider, type HSliderOptions } from "scenerystack/sun";
+import { DisposalBag } from "../../common/DisposalBag.js";
 import { LIGHT_SURFACE_TEXT_FILL, SIM_COMBO_BOX_OPTIONS } from "../../common/SimButtonOptions.js";
 import { SimPanel } from "../../common/SimPanel.js";
 import { StringManager } from "../../i18n/StringManager.js";
@@ -50,31 +51,51 @@ type SliderRowOptions = {
   trackSize?: Dimension2;
 } & Pick<HSliderOptions, "keyboardStep" | "shiftKeyboardStep" | "pageKeyboardStep" | "constrainValue">;
 
-function createLog10Property(linearProperty: TProperty<number>, range: Range): NumberProperty {
+/**
+ * A log-scaled companion Property for `linearProperty`, so a linear slider travel
+ * maps to a decade-per-unit frequency sweep. The two are kept in sync in both
+ * directions.
+ *
+ * Both conversions clamp: `10 ** Math.log10(x)` is not exactly `x` in binary
+ * floating point (`10 ** Math.log10(20000)` is 20000.000000000004), so writing the
+ * round-trip straight back would push the linear Property a few ulps outside its
+ * declared range — which trips its range assertion in a development build the
+ * moment the slider reaches either end.
+ *
+ * Exported for unit testing; the panel is its only production caller.
+ */
+export function createLog10Property(linearProperty: TProperty<number>, range: Range, bag: DisposalBag): NumberProperty {
   const logRange = new Range(Math.log10(range.min), Math.log10(range.max));
-  const logProperty = new NumberProperty(Math.log10(linearProperty.value), { range: logRange });
+  const logProperty = new NumberProperty(clamp(Math.log10(linearProperty.value), logRange.min, logRange.max), {
+    range: logRange,
+  });
   let syncing = false;
-  logProperty.link((logValue) => {
+  bag.link(logProperty, (logValue) => {
     if (syncing) {
       return;
     }
     syncing = true;
-    linearProperty.value = 10 ** logValue;
+    linearProperty.value = clamp(10 ** logValue, range.min, range.max);
     syncing = false;
   });
-  linearProperty.link((value) => {
+  bag.link(linearProperty, (value) => {
     if (syncing) {
       return;
     }
     syncing = true;
-    const clamped = Math.max(range.min, Math.min(range.max, value));
-    logProperty.value = Math.log10(clamped);
+    logProperty.value = clamp(Math.log10(clamp(value, range.min, range.max)), logRange.min, logRange.max);
     syncing = false;
   });
+  bag.own(logProperty);
   return logProperty;
 }
 
-function createSliderRow(valueProperty: TProperty<number>, range: Range, options: SliderRowOptions): Node {
+function createSliderRow(
+  valueProperty: TProperty<number>,
+  range: Range,
+  options: SliderRowOptions,
+  bag: DisposalBag,
+): Node {
   const trackSize = options.trackSize ?? TRACK_SIZE;
   const label = new Text(options.labelStringProperty, {
     font: LABEL_FONT,
@@ -125,8 +146,9 @@ function createSliderRow(valueProperty: TProperty<number>, range: Range, options
     valueText.right = trackSize.width;
     valueText.centerY = 0;
   };
-  label.boundsProperty.link(layoutHeader);
-  valueText.boundsProperty.link(layoutHeader);
+  bag.link(label.boundsProperty, layoutHeader);
+  bag.link(valueText.boundsProperty, layoutHeader);
+  bag.own(slider, label, valueText);
 
   return new VBox({
     align: "left",
@@ -166,7 +188,10 @@ export class SignalGeneratorPanel extends SimPanel {
   public readonly dutySlider: Node;
   public readonly phaseSlider: Node;
 
+  private readonly bag: DisposalBag;
+
   public constructor(model: OscilloscopeModel, options: SignalGeneratorPanelOptions) {
+    const bag = new DisposalBag();
     const strings = StringManager.getInstance();
     const g = strings.getGenerator();
     const src = strings.getSource();
@@ -191,44 +216,78 @@ export class SignalGeneratorPanel extends SimPanel {
       },
     );
 
-    const logFrequencyProperty = createLog10Property(fg.frequencyProperty, FG_FREQUENCY_RANGE);
-    const frequencySlider = createSliderRow(logFrequencyProperty, logFrequencyProperty.range, {
-      labelStringProperty: g.frequencyStringProperty,
-      valueStringProperty: derivedString(fg.frequencyProperty, formatFrequency),
-      accessibleName: controls.frequencyStringProperty,
-      trackSize: FREQUENCY_TRACK_SIZE,
-      keyboardStep: 0.05,
-      shiftKeyboardStep: 0.01,
-      pageKeyboardStep: 1,
-    });
+    /** A formatted readout Property that this panel owns and must dispose. */
+    const readout = <T>(property: TReadOnlyProperty<T>, format: (value: T) => string): TReadOnlyProperty<string> => {
+      const derived = derivedString(property, format);
+      bag.own(derived);
+      return derived;
+    };
 
-    const amplitudeSlider = createSliderRow(fg.amplitudeProperty, FG_AMPLITUDE_RANGE, {
-      labelStringProperty: g.amplitudeStringProperty,
-      valueStringProperty: derivedString(fg.amplitudeProperty, formatVoltage),
-      accessibleName: controls.amplitudeStringProperty,
-    });
-    const offsetSlider = createSliderRow(fg.offsetProperty, FG_OFFSET_RANGE, {
-      labelStringProperty: g.offsetStringProperty,
-      valueStringProperty: derivedString(fg.offsetProperty, formatVoltage),
-      accessibleName: controls.offsetStringProperty,
-    });
-    const dutySlider = createSliderRow(fg.dutyCycleProperty, FG_DUTY_CYCLE_RANGE, {
-      labelStringProperty: g.dutyStringProperty,
-      valueStringProperty: derivedString(fg.dutyCycleProperty, formatPercent),
-      accessibleName: controls.dutyStringProperty,
-      enabledProperty: new DerivedProperty(
-        [fg.waveformProperty],
-        (waveform) => waveform === "square" || waveform === "pulse",
-      ),
-    });
-    const phaseSlider = createSliderRow(fg.phaseProperty, FG_PHASE_RANGE, {
-      labelStringProperty: g.phaseStringProperty,
-      valueStringProperty: derivedString(fg.phaseProperty, formatDegrees),
-      accessibleName: controls.phaseStringProperty,
-      keyboardStep: 5,
-      shiftKeyboardStep: 1,
-      pageKeyboardStep: 45,
-    });
+    const logFrequencyProperty = createLog10Property(fg.frequencyProperty, FG_FREQUENCY_RANGE, bag);
+    const frequencySlider = createSliderRow(
+      logFrequencyProperty,
+      logFrequencyProperty.range,
+      {
+        labelStringProperty: g.frequencyStringProperty,
+        valueStringProperty: readout(fg.frequencyProperty, formatFrequency),
+        accessibleName: controls.frequencyStringProperty,
+        trackSize: FREQUENCY_TRACK_SIZE,
+        keyboardStep: 0.05,
+        shiftKeyboardStep: 0.01,
+        pageKeyboardStep: 1,
+      },
+      bag,
+    );
+
+    const amplitudeSlider = createSliderRow(
+      fg.amplitudeProperty,
+      FG_AMPLITUDE_RANGE,
+      {
+        labelStringProperty: g.amplitudeStringProperty,
+        valueStringProperty: readout(fg.amplitudeProperty, formatVoltage),
+        accessibleName: controls.amplitudeStringProperty,
+      },
+      bag,
+    );
+    const offsetSlider = createSliderRow(
+      fg.offsetProperty,
+      FG_OFFSET_RANGE,
+      {
+        labelStringProperty: g.offsetStringProperty,
+        valueStringProperty: readout(fg.offsetProperty, formatVoltage),
+        accessibleName: controls.offsetStringProperty,
+      },
+      bag,
+    );
+    const dutyEnabledProperty = new DerivedProperty(
+      [fg.waveformProperty],
+      (waveform) => waveform === "square" || waveform === "pulse",
+    );
+    bag.own(dutyEnabledProperty);
+    const dutySlider = createSliderRow(
+      fg.dutyCycleProperty,
+      FG_DUTY_CYCLE_RANGE,
+      {
+        labelStringProperty: g.dutyStringProperty,
+        valueStringProperty: readout(fg.dutyCycleProperty, formatPercent),
+        accessibleName: controls.dutyStringProperty,
+        enabledProperty: dutyEnabledProperty,
+      },
+      bag,
+    );
+    const phaseSlider = createSliderRow(
+      fg.phaseProperty,
+      FG_PHASE_RANGE,
+      {
+        labelStringProperty: g.phaseStringProperty,
+        valueStringProperty: readout(fg.phaseProperty, formatDegrees),
+        accessibleName: controls.phaseStringProperty,
+        keyboardStep: 5,
+        shiftKeyboardStep: 1,
+        pageKeyboardStep: 45,
+      },
+      bag,
+    );
 
     const status = src.status;
     const statusTextProperty: TReadOnlyProperty<string> = new DerivedProperty(
@@ -260,15 +319,17 @@ export class SignalGeneratorPanel extends SimPanel {
         }
       },
     );
+    const statusVisibleProperty = new DerivedProperty(
+      [model.ch1.inputProperty, model.ch2.inputProperty],
+      (a, b) => a === "microphone" || b === "microphone",
+    );
     const statusText = new Text(statusTextProperty, {
       font: new PhetFont({ size: 11, style: "italic" }),
       fill: OscilloscopeColors.textColorProperty,
-      visibleProperty: new DerivedProperty(
-        [model.ch1.inputProperty, model.ch2.inputProperty],
-        (a, b) => a === "microphone" || b === "microphone",
-      ),
+      visibleProperty: statusVisibleProperty,
       maxWidth: 300,
     });
+    bag.own(statusText, statusVisibleProperty, statusTextProperty);
 
     // Silkscreen model label, so the box reads as a distinct bench instrument.
     const modelLabel = new Text("OpenPhysics · FG-100", {
@@ -278,22 +339,18 @@ export class SignalGeneratorPanel extends SimPanel {
       maxWidth: 200,
     });
 
+    const waveformLabel = new Text(g.waveformStringProperty, {
+      font: LABEL_FONT,
+      fill: OscilloscopeColors.textColorProperty,
+      maxWidth: 140,
+    });
+    bag.own(modelLabel, waveformLabel);
+
     const body = new VBox({
       align: "left",
       spacing: 8,
       children: [
-        new VBox({
-          align: "left",
-          spacing: 3,
-          children: [
-            new Text(g.waveformStringProperty, {
-              font: LABEL_FONT,
-              fill: OscilloscopeColors.textColorProperty,
-              maxWidth: 140,
-            }),
-            waveformComboBox,
-          ],
-        }),
+        new VBox({ align: "left", spacing: 3, children: [waveformLabel, waveformComboBox] }),
         statusText,
         frequencySlider,
         new HBox({ spacing: 18, align: "top", children: [amplitudeSlider, offsetSlider] }),
@@ -311,6 +368,7 @@ export class SignalGeneratorPanel extends SimPanel {
       barColor: OscilloscopeColors.generatorFaceplateColorProperty,
       textColor: OscilloscopeColors.generatorAccentColorProperty,
       font: HEADING_FONT,
+      bag,
     });
 
     super(content, {
@@ -322,11 +380,19 @@ export class SignalGeneratorPanel extends SimPanel {
       yMargin: 14,
     });
 
+    this.bag = bag;
+    this.bag.own(waveformComboBox);
+
     this.waveformComboBox = waveformComboBox;
     this.frequencySlider = frequencySlider;
     this.amplitudeSlider = amplitudeSlider;
     this.offsetSlider = offsetSlider;
     this.dutySlider = dutySlider;
     this.phaseSlider = phaseSlider;
+  }
+
+  public override dispose(): void {
+    this.bag.dispose();
+    super.dispose();
   }
 }
