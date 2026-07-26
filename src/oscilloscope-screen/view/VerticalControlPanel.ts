@@ -21,8 +21,8 @@ import { COUPLINGS } from "../model/Coupling.js";
 import { MATH_MODES, type OscilloscopeModel } from "../model/OscilloscopeModel.js";
 import { derivedString, numberItems, unionItems } from "./controlHelpers.js";
 import { formatDivisions, formatVoltsPerDiv } from "./formatUnits.js";
+import { withSectionHeader } from "./panelSection.js";
 
-const HEADING_FONT = new PhetFont({ size: 13, weight: "bold" });
 const CHANNEL_FONT = new PhetFont({ size: 13, weight: "bold" });
 
 type ChannelA11y = {
@@ -119,18 +119,17 @@ export class VerticalControlPanel extends SimPanel {
       minWidth: 44,
     });
 
-    const content = new VBox({
+    const body = new VBox({
       align: "center",
       spacing: 8,
       children: [
-        new Text(v.titleStringProperty, { font: HEADING_FONT, fill: OscilloscopeColors.textColorProperty }),
         new HBox({ spacing: 16, align: "top", children: [column1, column2] }),
         new HBox({ spacing: 8, children: [mathButton, fftButton] }),
         new HBox({ spacing: 28, align: "top", children: [options.ch1Bnc, options.ch2Bnc] }),
       ],
     });
 
-    super(content, { xMargin: 10, yMargin: 8 });
+    super(withSectionHeader(v.titleStringProperty, body), { xMargin: 10, yMargin: 8 });
 
     this.controlsInOrder.push(
       ...column1.order,

@@ -6,20 +6,17 @@
  */
 
 import { DerivedProperty } from "scenerystack/axon";
-import { HBox, type Node, Text, VBox } from "scenerystack/scenery";
-import { PhetFont } from "scenerystack/scenery-phet";
+import { HBox, type Node, VBox } from "scenerystack/scenery";
 import { PanelButton } from "../../common/controls/PanelButton.js";
 import { RotaryKnob } from "../../common/controls/RotaryKnob.js";
 import { RotarySwitch } from "../../common/controls/RotarySwitch.js";
 import { SimPanel } from "../../common/SimPanel.js";
 import { StringManager } from "../../i18n/StringManager.js";
-import OscilloscopeColors from "../../OscilloscopeColors.js";
 import { SCOPE_HORIZONTAL_POSITION_RANGE, SCOPE_TIME_PER_DIV_STEPS } from "../../SimConstants.js";
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
 import { derivedString, numberItems } from "./controlHelpers.js";
 import { formatDivisions, formatTimePerDiv } from "./formatUnits.js";
-
-const HEADING_FONT = new PhetFont({ size: 13, weight: "bold" });
+import { withSectionHeader } from "./panelSection.js";
 
 export class HorizontalControlPanel extends SimPanel {
   public readonly controlsInOrder: Node[];
@@ -68,17 +65,16 @@ export class HorizontalControlPanel extends SimPanel {
       fontSize: 11,
     });
 
-    const content = new VBox({
+    const body = new VBox({
       align: "left",
       spacing: 8,
       children: [
-        new Text(h.titleStringProperty, { font: HEADING_FONT, fill: OscilloscopeColors.textColorProperty }),
         new HBox({ spacing: 12, align: "top", children: [positionKnob, timeSwitch] }),
         new HBox({ spacing: 8, children: [magButton, xyButton] }),
       ],
     });
 
-    super(content, { xMargin: 10, yMargin: 8 });
+    super(withSectionHeader(h.titleStringProperty, body), { xMargin: 10, yMargin: 8 });
 
     this.controlsInOrder = [positionKnob, timeSwitch, magButton, xyButton];
   }

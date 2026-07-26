@@ -215,6 +215,29 @@ const OscilloscopeColors = {
     projector: "#b0b4bb",
   }),
 
+  // ── Front-panel section header strips ────────────────────────────────────────
+  // The bench-instrument look groups each control cluster (Acquire / Horizontal /
+  // Trigger / Vertical) under a labeled header bar, like the "Vertical | Horizontal
+  // | Trigger" band across a real scope's front panel.
+
+  /** Fill of a section-header label strip. */
+  sectionHeaderColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "sectionHeader", {
+    default: "#33415e",
+    projector: "#d9dee7",
+  }),
+
+  /** Text on a section-header label strip. */
+  sectionHeaderTextColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "sectionHeaderText", {
+    default: "#dbe7ff",
+    projector: "#1a1a1a",
+  }),
+
+  /** Decorative bezel softkey buttons flanking the display (non-interactive chrome). */
+  softkeyColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "softkey", {
+    default: "#2b303a",
+    projector: "#e2e4e9",
+  }),
+
   // ── Function generator module ────────────────────────────────────────────────
   // Deliberately distinct from the navy scope front-panel chrome so the signal
   // source reads as a separate instrument (sliders / combo boxes, not knobs).
@@ -235,6 +258,12 @@ const OscilloscopeColors = {
   generatorAccentColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "generatorAccent", {
     default: "#e0a045",
     projector: "#8a5a12",
+  }),
+
+  /** Faceplate header strip on the standalone function-generator instrument box. */
+  generatorFaceplateColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "generatorFaceplate", {
+    default: "#0f1c16",
+    projector: "#cfdcd4",
   }),
 
   /** Highlighted slider-thumb fill while dragging / hovering. */

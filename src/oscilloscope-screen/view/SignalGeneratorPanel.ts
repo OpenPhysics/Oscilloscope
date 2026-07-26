@@ -14,7 +14,7 @@ import {
   type TReadOnlyProperty,
 } from "scenerystack/axon";
 import { Dimension2, Range } from "scenerystack/dot";
-import { HBox, Node, Rectangle, Text, VBox } from "scenerystack/scenery";
+import { HBox, Node, Text, VBox } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
 import { ComboBox, type ComboBoxItem, HSlider, type HSliderOptions } from "scenerystack/sun";
 import { LIGHT_SURFACE_TEXT_FILL, SIM_COMBO_BOX_OPTIONS } from "../../common/SimButtonOptions.js";
@@ -32,6 +32,7 @@ import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
 import { WAVEFORMS } from "../model/Waveform.js";
 import { derivedString } from "./controlHelpers.js";
 import { formatDegrees, formatFrequency, formatPercent, formatVoltage } from "./formatUnits.js";
+import { withSectionHeader } from "./panelSection.js";
 
 const HEADING_FONT = new PhetFont({ size: 15, weight: "bold" });
 const LABEL_FONT = new PhetFont(12);
@@ -269,26 +270,18 @@ export class SignalGeneratorPanel extends SimPanel {
       maxWidth: 300,
     });
 
-    const heading = new HBox({
-      spacing: 8,
-      children: [
-        new Rectangle(0, 0, 4, 16, {
-          fill: OscilloscopeColors.generatorAccentColorProperty,
-          cornerRadius: 1,
-        }),
-        new Text(g.titleStringProperty, {
-          font: HEADING_FONT,
-          fill: OscilloscopeColors.generatorAccentColorProperty,
-          maxWidth: 240,
-        }),
-      ],
+    // Silkscreen model label, so the box reads as a distinct bench instrument.
+    const modelLabel = new Text("OpenPhysics · FG-100", {
+      font: new PhetFont({ size: 10, weight: "bold" }),
+      fill: OscilloscopeColors.generatorAccentColorProperty,
+      opacity: 0.75,
+      maxWidth: 200,
     });
 
-    const content = new VBox({
+    const body = new VBox({
       align: "left",
       spacing: 8,
       children: [
-        heading,
         new VBox({
           align: "left",
           spacing: 3,
@@ -310,14 +303,23 @@ export class SignalGeneratorPanel extends SimPanel {
           align: "top",
           children: [options.sourceJackA, options.sourceJackB, options.sourceJackMic],
         }),
+        modelLabel,
       ],
+    });
+
+    const content = withSectionHeader(g.titleStringProperty, body, {
+      barColor: OscilloscopeColors.generatorFaceplateColorProperty,
+      textColor: OscilloscopeColors.generatorAccentColorProperty,
+      font: HEADING_FONT,
     });
 
     super(content, {
       fill: OscilloscopeColors.generatorPanelBackgroundColorProperty,
       stroke: OscilloscopeColors.generatorPanelBorderColorProperty,
-      xMargin: 14,
-      yMargin: 12,
+      lineWidth: 3,
+      cornerRadius: 10,
+      xMargin: 16,
+      yMargin: 14,
     });
 
     this.waveformComboBox = waveformComboBox;

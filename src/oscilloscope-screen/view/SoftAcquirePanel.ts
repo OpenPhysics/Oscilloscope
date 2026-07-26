@@ -6,15 +6,13 @@
  */
 
 import type { TProperty } from "scenerystack/axon";
-import { HBox, type Node, Text, VBox } from "scenerystack/scenery";
-import { PhetFont } from "scenerystack/scenery-phet";
+import { HBox, type Node, VBox } from "scenerystack/scenery";
 import { PanelButton } from "../../common/controls/PanelButton.js";
 import { SimPanel } from "../../common/SimPanel.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
-
-const HEADING_FONT = new PhetFont({ size: 13, weight: "bold" });
+import { withSectionHeader } from "./panelSection.js";
 
 export type SoftAcquirePanelOptions = {
   showMeasurementsProperty: TProperty<boolean>;
@@ -115,18 +113,17 @@ export class SoftAcquirePanel extends SimPanel {
       fontSize: 11,
     });
 
-    const content = new VBox({
+    const body = new VBox({
       align: "center",
       spacing: 8,
       children: [
-        new Text(acq.titleStringProperty, { font: HEADING_FONT, fill: OscilloscopeColors.textColorProperty }),
         new HBox({ spacing: 6, children: [cursorButton, measureButton, helpButton] }),
         new HBox({ spacing: 6, children: [runStopButton, singleButton, autosetButton] }),
         new HBox({ spacing: 6, children: [persistButton, exportCsvButton, exportImageButton] }),
       ],
     });
 
-    super(content, { xMargin: 10, yMargin: 8 });
+    super(withSectionHeader(acq.titleStringProperty, body), { xMargin: 10, yMargin: 8 });
 
     this.controlsInOrder = [
       cursorButton,

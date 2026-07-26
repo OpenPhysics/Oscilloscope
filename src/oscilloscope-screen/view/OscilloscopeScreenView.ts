@@ -13,15 +13,17 @@
 import type { TProperty, TReadOnlyProperty } from "scenerystack/axon";
 import { DerivedProperty, NumberProperty } from "scenerystack/axon";
 import { Bounds2 } from "scenerystack/dot";
-import { Node, Text } from "scenerystack/scenery";
+import { Node, Rectangle, Text, VBox } from "scenerystack/scenery";
 import { PhetFont, ResetAllButton } from "scenerystack/scenery-phet";
 import type { ScreenViewOptions } from "scenerystack/sim";
 import { Dialog, ScreenView } from "scenerystack/sim";
 import { downloadTextFile, triggerBlobDownload } from "../../common/downloadFile.js";
 import { FLAT_RESET_ALL_BUTTON_OPTIONS } from "../../common/SimButtonOptions.js";
 import { StringManager } from "../../i18n/StringManager.js";
+import OscilloscopeColors from "../../OscilloscopeColors.js";
 import {
   HORIZONTAL_DIVISIONS,
+  PANEL_CORNER_RADIUS,
   SCOPE_TIME_PER_DIV_STEPS,
   SCOPE_TRIGGER_LEVEL_RANGE,
   SCOPE_VOLTS_PER_DIV_STEPS,
@@ -141,9 +143,29 @@ export class OscilloscopeScreenView extends ScreenView {
       sourceJackMic: patchLayer.sourceJackMic,
     });
 
+    // Decorative bezel softkeys flanking the CRT, like a real scope's menu column.
+    // Purely chrome: non-interactive and absent from the PDOM.
+    const softkeys = new VBox({
+      spacing: 12,
+      pickable: false,
+      children: Array.from(
+        { length: 5 },
+        () =>
+          new Rectangle(0, 0, 22, 30, {
+            fill: OscilloscopeColors.softkeyColorProperty,
+            stroke: OscilloscopeColors.knobRimColorProperty,
+            lineWidth: 1,
+            cornerRadius: PANEL_CORNER_RADIUS - 2,
+          }),
+      ),
+    });
+    softkeys.left = displayNode.right + 6;
+    softkeys.centerY = displayNode.centerY;
+    this.addChild(softkeys);
+
     // TBS geography to the right of the CRT:
     // soft/acquire on top, then horizontal + trigger, then vertical (with BNCs).
-    const controlsLeft = displayNode.right + 16;
+    const controlsLeft = softkeys.right + 12;
     softAcquirePanel.left = controlsLeft;
     softAcquirePanel.top = SCREEN_VIEW_MARGIN;
 
