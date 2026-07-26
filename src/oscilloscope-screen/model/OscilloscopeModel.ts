@@ -27,6 +27,7 @@ import { TimeModel } from "../../common/TimeModel.js";
 import OscilloscopeNamespace from "../../OscilloscopeNamespace.js";
 import {
   AC_COUPLING_TIME_CONSTANT,
+  AC_STEADY_STATE_SAMPLES,
   CURSOR_TIME_RANGE,
   CURSOR_VOLT_RANGE,
   HORIZONTAL_DIVISIONS,
@@ -35,6 +36,7 @@ import {
   SCOPE_HORIZONTAL_POSITION_RANGE,
   SCOPE_MAGNIFY_FACTOR,
   SCOPE_TIME_PER_DIV_RANGE,
+  SCOPE_TIME_PER_DIV_STEPS,
   TRACE_SAMPLE_COUNT,
   TRIGGER_SEARCH_STEPS,
   VERTICAL_DIVISIONS,
@@ -72,15 +74,12 @@ function windowMean(buffer: Float32Array): number {
   return sum / buffer.length;
 }
 
-/** Bounded number of samples used to settle the AC high-pass before the window. */
-const AC_WARMUP_SAMPLES = 1024;
-
 /**
  * First-order high-pass filter modelling AC-coupling droop, in place.
  *
  * Discrete form: y[i] = α·(y[i−1] + x[i] − x[i−1]) with α = τ/(τ+dt). Callers
  * should already have removed the DC component so the filter only shapes edges.
- * Pass `prevX0`/`prevY0` (from {@link warmAcHighPass}) to seed the filter with a
+ * Pass `prevX0`/`prevY0` (from {@link settleAcHighPass}) to seed the filter with a
  * settled state so the visible window is not biased by the startup transient;
  * omit them to start cold (prevX = first sample, prevY = 0).
  */
@@ -106,32 +105,74 @@ function applyAcHighPass(buffer: Float32Array, windowSeconds: number, prevX0?: n
 }
 
 /**
- * Settles the AC high-pass over ~5 time-constants of signal ending at `tEnd`,
- * returning the filter state `[prevX, prevY]` to seed {@link applyAcHighPass}
- * for the visible window (whose first sample is at `tEnd`).
+ * Solves for the AC high-pass's *periodic steady state* at `tEnd`, returning the
+ * filter state `[prevX, prevY]` that seeds {@link applyAcHighPass} for the visible
+ * window (whose first sample is at `tEnd`).
  *
- * The warm-up steps a fixed, bounded number of samples (`AC_WARMUP_SAMPLES`)
- * with its own dt and matching α, independent of the timebase. This keeps a fast
- * sweep cheap — otherwise, at window-resolution, 5τ can span tens of millions of
- * samples per frame — while still finely settling the filter's slow dynamics.
- * `sampleAt` must already have the DC component removed.
+ * The discrete high-pass is linear, so stepping it across one whole period of a
+ * periodic input is an affine map on its state:
+ *
+ *     y(t + P) = a·y(t) + b,    a = α^N,    b = the one-period response from y = 0
+ *
+ * whose fixed point `y* = b / (1 − a)` is exactly the settled output — reached in
+ * closed form instead of marching through the ~5 time-constants the transient
+ * actually takes to decay. That matters at a fast timebase, where 5τ spans
+ * thousands of periods: stepping it with a fixed, period-blind sample budget has
+ * to alias the carrier, which used to leave tens of millivolts of baseline error
+ * on a fast sweep. This costs one period of samples at any frequency.
+ *
+ * `sampleAt` must already have the DC component removed, and `periodSeconds` must
+ * be finite and positive — callers with an aperiodic source (the noise waveform)
+ * seed the filter directly instead.
  */
-function warmAcHighPass(sampleAt: (t: number) => number, tEnd: number): [number, number] {
-  const warmupSeconds = 5 * AC_COUPLING_TIME_CONSTANT;
-  const dt = warmupSeconds / AC_WARMUP_SAMPLES;
-  const alpha = AC_COUPLING_TIME_CONSTANT / (AC_COUPLING_TIME_CONSTANT + dt);
-  const tStart = tEnd - warmupSeconds;
+function settleAcHighPass(sampleAt: (t: number) => number, tEnd: number, periodSeconds: number): [number, number] {
+  const steps = AC_STEADY_STATE_SAMPLES;
+  const dt = periodSeconds / steps;
+  // Work in the log domain: α sits within an ulp or two of 1 for a fast signal, so
+  // α^N and 1 − α^N both lose all their significance if computed directly.
+  const logAlpha = Math.log1p(-dt / (AC_COUPLING_TIME_CONSTANT + dt));
+  const alpha = Math.exp(logAlpha);
+  const oneMinusDecay = -Math.expm1(steps * logAlpha);
 
+  const tStart = tEnd - periodSeconds;
   let prevX = sampleAt(tStart);
-  let prevY = 0;
-  for (let i = 1; i <= AC_WARMUP_SAMPLES; i++) {
+  let response = 0;
+  for (let i = 1; i <= steps; i++) {
     const x = sampleAt(tStart + i * dt);
-    prevY = alpha * (prevY + x - prevX);
+    response = alpha * (response + x - prevX);
     prevX = x;
   }
-  // The final step lands at tEnd, so prevX is the sample at the window start.
-  return [prevX, prevY];
+
+  // The final step lands on tEnd, so prevX is the sample at the window start and
+  // `response` is b — the one-period response from a zero initial state.
+  return [prevX, oneMinusDecay > 0 ? response / oneMinusDecay : response];
 }
+
+/** The largest entry of `steps` that does not exceed `limit` (the smallest if none does). */
+function largestStepAtMost(steps: readonly number[], limit: number): number {
+  let best: number | null = null;
+  let smallest = steps[0] ?? limit;
+  for (const step of steps) {
+    if (step < smallest) {
+      smallest = step;
+    }
+    if (step <= limit && (best === null || step > best)) {
+      best = step;
+    }
+  }
+  return best ?? smallest;
+}
+
+/**
+ * How the trigger comparator must be transformed to watch what a channel actually
+ * displays. See {@link OscilloscopeModel.triggerViewFor}.
+ */
+type TriggerView = {
+  /** Threshold in raw source volts, before coupling and invert. */
+  readonly level: number;
+  /** Whether the comparator looks for a rising edge of the raw source. */
+  readonly rising: boolean;
+};
 
 export type OscilloscopeModelOptions = {
   /** Preference-owned "inject noise" toggle; the generator reads it live. */
@@ -224,6 +265,7 @@ export class OscilloscopeModel implements TModel {
 
   private triggerOffsetSeconds = 0;
   private syncingPatch = false;
+  private clampingTimebase = false;
 
   public constructor(providedOptions?: OscilloscopeModelOptions) {
     this.functionGenerator = new FunctionGenerator(
@@ -250,6 +292,20 @@ export class OscilloscopeModel implements TModel {
         this.audioInput.stop();
       }
     });
+
+    // The microphone's acquisition memory is finite, so the sweep it can fill is
+    // too. Hold the timebase inside that limit rather than letting the graticule
+    // claim more time than the capture actually holds.
+    Multilink.multilink(
+      [
+        this.ch1.inputProperty,
+        this.ch2.inputProperty,
+        this.timePerDivisionProperty,
+        this.magnifyProperty,
+        this.audioInput.statusProperty,
+      ],
+      () => this.enforceMicrophoneTimebase(),
+    );
 
     this.trigger.modeProperty.link((mode) => {
       if (mode === "single") {
@@ -296,6 +352,28 @@ export class OscilloscopeModel implements TModel {
   /** True when either channel is patched to the microphone. */
   public get microphoneInUse(): boolean {
     return this.ch1.inputProperty.value === "microphone" || this.ch2.inputProperty.value === "microphone";
+  }
+
+  /**
+   * The longest time/div the microphone can honestly fill, given that an
+   * `AnalyserNode` only hands back a fixed number of the most recent samples.
+   * Beyond this the graticule would be labelling time the capture does not hold,
+   * so {@link enforceMicrophoneTimebase} clamps the knob to it instead.
+   */
+  public get microphoneMaxTimePerDivision(): number {
+    const perDivision = this.audioInput.maxWindowSeconds / HORIZONTAL_DIVISIONS;
+    return perDivision * (this.magnifyProperty.value ? SCOPE_MAGNIFY_FACTOR : 1);
+  }
+
+  /**
+   * Arms and starts a single-shot capture, as the front-panel SINGLE key does:
+   * select SINGLE, arm, and make sure the sweep clock runs so the next trigger
+   * event lands. Pressing SINGLE again re-arms a scope that already stopped.
+   */
+  public captureSingle(): void {
+    this.trigger.modeProperty.value = "single";
+    this.trigger.arm();
+    this.timer.isPlayingProperty.value = true;
   }
 
   public get sampleCount(): number {
@@ -356,32 +434,7 @@ export class OscilloscopeModel implements TModel {
    */
   public refresh(): void {
     const triggerMode = this.trigger.modeProperty.value;
-    const micInUse = this.microphoneInUse;
-    const triggerChannel = this.trigger.sourceProperty.value === "ch2" ? this.ch2 : this.ch1;
-    const triggerIsMic = triggerChannel.inputProperty.value === "microphone";
-
-    const audioTriggered = micInUse
-      ? this.audioInput.fillTrace(
-          this.audioScratchBuffer,
-          this.timeWindow,
-          this.trigger.levelProperty.value,
-          this.trigger.slopeProperty.value,
-        )
-      : false;
-
-    let triggered: boolean;
-    if (triggerIsMic) {
-      triggered = audioTriggered;
-      this.triggerOffsetSeconds = 0;
-    } else if (this.isGeneratorInput(triggerChannel.inputProperty.value)) {
-      const offset = this.computeTriggerOffset(triggerChannel.inputProperty.value);
-      triggered = offset !== null;
-      this.triggerOffsetSeconds = offset ?? 0;
-    } else {
-      // Unpatched trigger source: free-run in auto; hold otherwise.
-      triggered = false;
-      this.triggerOffsetSeconds = 0;
-    }
+    const triggered = this.acquireTrigger();
 
     if (!triggered && triggerMode !== "auto") {
       return;
@@ -414,6 +467,57 @@ export class OscilloscopeModel implements TModel {
     }
   }
 
+  /**
+   * Runs the trigger comparator for this frame, recapturing the microphone along
+   * the way (it can only report whether it triggered as a side effect of
+   * resampling), and leaves {@link triggerOffsetSeconds} set for the sweep.
+   *
+   * @returns whether a trigger event was found — `auto` sweeps anyway, `normal`
+   *   and `single` hold their last capture.
+   */
+  private acquireTrigger(): boolean {
+    const triggerChannel = this.trigger.sourceProperty.value === "ch2" ? this.ch2 : this.ch1;
+    const triggerInput = triggerChannel.inputProperty.value;
+    const triggerIsMic = triggerInput === "microphone";
+
+    // The comparator watches what the channel displays, so the front-panel level
+    // and slope are mapped through that channel's coupling and invert first. For
+    // the microphone there is no analytic DC, so the previous frame's window mean
+    // stands in — the scratch buffer still holds it until fillTrace() overwrites it.
+    const triggerView = this.triggerViewFor(
+      triggerChannel,
+      triggerIsMic ? windowMean(this.audioScratchBuffer) : this.functionGenerator.meanVoltage,
+    );
+
+    // Resample the microphone even when the trigger channel is grounded — the
+    // other channel may be the one holding the mic.
+    const audioTriggered = this.microphoneInUse
+      ? this.audioInput.fillTrace(
+          this.audioScratchBuffer,
+          this.timeWindow,
+          triggerView?.level ?? 0,
+          triggerView?.rising === false ? "falling" : "rising",
+        )
+      : false;
+
+    this.triggerOffsetSeconds = 0;
+
+    // Grounded trigger channel: no signal to compare against.
+    if (!triggerView) {
+      return false;
+    }
+    if (triggerIsMic) {
+      return audioTriggered;
+    }
+    // Unpatched trigger source: free-run in auto; hold otherwise.
+    if (!this.isGeneratorInput(triggerInput)) {
+      return false;
+    }
+    const offset = this.computeTriggerOffset(triggerInput, triggerView);
+    this.triggerOffsetSeconds = offset ?? 0;
+    return offset !== null;
+  }
+
   private enforceExclusivePatch(changed: Channel, input: ChannelInput): void {
     if (this.syncingPatch || input === "none") {
       return;
@@ -428,6 +532,55 @@ export class OscilloscopeModel implements TModel {
 
   private isGeneratorInput(input: ChannelInput): input is "functionGeneratorA" | "functionGeneratorB" {
     return input === "functionGeneratorA" || input === "functionGeneratorB";
+  }
+
+  /**
+   * Maps the front-panel trigger level and slope — which the user sets against the
+   * trace *as drawn*, via the on-screen marker — into the raw source signal the
+   * comparator searches.
+   *
+   * The displayed trace is `sign · (source − dc)`, so a displayed crossing of
+   * `level` on the selected edge is a raw crossing of `sign·level + dc` on the edge
+   * `sign` maps it to. Without this the marker and the comparator disagree: an
+   * AC-coupled offset signal holds forever in NORMAL with the marker sitting right
+   * on the waveform, and an inverted channel fires its "rising" trigger on a
+   * visibly falling edge.
+   *
+   * @param channel - the channel the trigger watches
+   * @param dcVolts - the DC component AC coupling removes from that channel
+   * @returns null for a grounded channel, which has no signal to trigger on
+   */
+  private triggerViewFor(channel: Channel, dcVolts: number): TriggerView | null {
+    const coupling = channel.couplingProperty.value;
+    if (coupling === "GND") {
+      return null;
+    }
+    const inverted = channel.invertedProperty.value;
+    const sign = inverted ? -1 : 1;
+    const dc = coupling === "AC" ? dcVolts : 0;
+    const risingOnScreen = this.trigger.slopeProperty.value === "rising";
+    return {
+      level: sign * this.trigger.levelProperty.value + dc,
+      rising: inverted ? !risingOnScreen : risingOnScreen,
+    };
+  }
+
+  /**
+   * Pulls the timebase back inside {@link microphoneMaxTimePerDivision} whenever the
+   * microphone is patched, snapping down to the next 1-2-5 detent so the knob keeps
+   * reading a real switch position.
+   */
+  private enforceMicrophoneTimebase(): void {
+    if (this.clampingTimebase || !this.microphoneInUse) {
+      return;
+    }
+    const limit = this.microphoneMaxTimePerDivision;
+    if (this.timePerDivisionProperty.value <= limit) {
+      return;
+    }
+    this.clampingTimebase = true;
+    this.timePerDivisionProperty.value = largestStepAtMost([...SCOPE_TIME_PER_DIV_STEPS], limit);
+    this.clampingTimebase = false;
   }
 
   private phaseForInput(input: ChannelInput): number {
@@ -483,11 +636,18 @@ export class OscilloscopeModel implements TModel {
     }
 
     if (coupling === "AC") {
-      // Settle the high-pass on ~5 time-constants of pre-roll so the visible
-      // window is not skewed by the filter's startup transient. Noise is white,
-      // so both traces are warmed on the same clean carrier.
-      const tWindowStart = t0 + (0 / lastIndex - 0.5) * windowSeconds - hShift;
-      const [prevX, prevY] = warmAcHighPass((t) => fg.cleanVoltageAt(t, phaseDegrees) - dcVolts, tWindowStart);
+      // Seed the high-pass with its settled state so the visible window is not
+      // skewed by the filter's startup transient. Noise is white, so both traces
+      // are settled on the same clean carrier.
+      const tWindowStart = t0 - 0.5 * windowSeconds - hShift;
+      const frequency = fg.frequencyProperty.value;
+      const periodic = fg.waveformProperty.value !== "noise" && frequency > 0;
+      const [prevX, prevY] = periodic
+        ? settleAcHighPass((t) => fg.cleanVoltageAt(t, phaseDegrees) - dcVolts, tWindowStart, 1 / frequency)
+        : // Aperiodic (the noise waveform) has no steady state to solve for, and
+          // no DC to decay away either — it is already zero-mean, so starting the
+          // filter at rest costs nothing visible.
+          [fg.cleanVoltageAt(tWindowStart, phaseDegrees) - dcVolts, 0];
       for (let i = 0; i < n; i++) {
         buffer[i] = (buffer[i] ?? 0) - dcVolts;
         cleanBuffer[i] = (cleanBuffer[i] ?? 0) - dcVolts;
@@ -515,11 +675,15 @@ export class OscilloscopeModel implements TModel {
           buffer[i] = (buffer[i] ?? 0) - dcVolts;
         }
       }
-      applyAcHighPass(buffer, this.timeWindow);
+      // Audio sits far above the filter's 1/(2πτ) ≈ 16 Hz corner, where the
+      // high-pass settles to unity gain, so y = x is the right starting state.
+      // Starting from rest instead would ramp the left edge of every sweep.
+      const first = buffer[0] ?? 0;
+      applyAcHighPass(buffer, this.timeWindow, first, first);
     }
   }
 
-  private computeTriggerOffset(input: ChannelInput): number | null {
+  private computeTriggerOffset(input: ChannelInput, view: TriggerView): number | null {
     const fg = this.functionGenerator;
     const f = fg.frequencyProperty.value;
     if (f <= 0 || !this.isGeneratorInput(input)) {
@@ -527,8 +691,7 @@ export class OscilloscopeModel implements TModel {
     }
 
     const phaseDeg = this.phaseForInput(input);
-    const level = this.trigger.levelProperty.value;
-    const rising = this.trigger.slopeProperty.value === "rising";
+    const { level, rising } = view;
     const period = 1 / f;
 
     let prev = fg.cleanVoltageAt(0, phaseDeg);

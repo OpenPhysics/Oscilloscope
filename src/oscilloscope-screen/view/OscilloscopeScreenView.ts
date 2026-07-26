@@ -83,11 +83,25 @@ export class OscilloscopeScreenView extends ScreenView {
   private readonly measuredFrequency2 = new NumberProperty(0);
   private readonly measuredDeltaFrequency = new NumberProperty(0);
 
+  /** Every measured Property, so Reset All cannot leave one behind. */
+  private readonly measuredProperties: NumberProperty[];
+
   private redrawDirty = true;
   private readonly markRedrawDirty = (): void => {
     this.redrawDirty = true;
   };
   private readonly renderInputs: TReadOnlyProperty<unknown>[] = [];
+
+  // Scratch buffers for the per-frame measurement pass. Measurements run on every
+  // redraw, so these are allocated once and reused, like the model's trace buffers —
+  // a fresh typed array per frame is exactly the garbage this sim avoids elsewhere.
+  private readonly signedBuffer: Float32Array;
+  private readonly phaseBufferA: Float32Array;
+  private readonly phaseBufferB: Float32Array;
+
+  // Built on first use and reused: a new Dialog per press would accumulate one
+  // undisposed dialog (and its localized Texts) for every visit to the Lab menu.
+  private labDialog: LabActivitiesDialog | null = null;
 
   public constructor(model: OscilloscopeModel, providedOptions: OscilloscopeScreenViewOptions) {
     const { showMeasurementsProperty, ...screenViewOptions } = providedOptions;
@@ -99,6 +113,28 @@ export class OscilloscopeScreenView extends ScreenView {
     });
 
     this.model = model;
+    this.measuredProperties = [
+      this.measuredFrequency,
+      this.measuredPeriod,
+      this.measuredVpp,
+      this.measuredVrms,
+      this.measuredVmax,
+      this.measuredVmin,
+      this.measuredDutyCycle,
+      this.measuredRiseTime,
+      this.measuredFallTime,
+      this.measuredMean,
+      this.measuredPhase,
+      this.measuredDeltaTime,
+      this.measuredCursorFrequency,
+      this.measuredDeltaVoltage,
+      this.measuredFrequency1,
+      this.measuredFrequency2,
+      this.measuredDeltaFrequency,
+    ];
+    this.signedBuffer = new Float32Array(model.sampleCount);
+    this.phaseBufferA = new Float32Array(model.sampleCount);
+    this.phaseBufferB = new Float32Array(model.sampleCount);
 
     const displayNode = new OscilloscopeDisplayNode(model, {
       left: SCREEN_VIEW_MARGIN,
@@ -156,7 +192,7 @@ export class OscilloscopeScreenView extends ScreenView {
 
     const softAcquirePanel = new SoftAcquirePanel(model, {
       showMeasurementsProperty,
-      onSingle: () => this.captureSingle(),
+      onSingle: () => model.captureSingle(),
       onAutoset: () => this.autoset(),
       onHelp: () => this.showLabs(),
       onExportCsv: () => this.exportCsv(),
@@ -222,10 +258,9 @@ export class OscilloscopeScreenView extends ScreenView {
     this.addChild(generatorPanel);
     this.addChild(patchLayer);
 
-    // After layout, draw the default CH1←OUT A cable.
+    // After layout, draw the default CH1←OUT A cable. The layer keeps itself in
+    // sync with the patch Properties from here on, so no extra listener is needed.
     patchLayer.redrawWires();
-    model.ch1.inputProperty.lazyLink(() => patchLayer.redrawWires());
-    model.ch2.inputProperty.lazyLink(() => patchLayer.redrawWires());
 
     const resetAllButton = new ResetAllButton({
       ...FLAT_RESET_ALL_BUTTON_OPTIONS,
@@ -300,24 +335,18 @@ export class OscilloscopeScreenView extends ScreenView {
   }
 
   private showLabs(): void {
-    const dialog = new LabActivitiesDialog(this.model, () => {
+    this.labDialog ??= new LabActivitiesDialog(this.model, () => {
       this.model.refresh();
       this.redraw();
       this.redrawDirty = false;
       this.patchLayer.redrawWires();
     });
-    dialog.show();
+    this.labDialog.show();
   }
 
   private redraw(): void {
     this.displayNode.update();
     this.updateMeasurements();
-  }
-
-  private captureSingle(): void {
-    this.model.trigger.modeProperty.value = "single";
-    this.model.trigger.arm();
-    this.model.timer.isPlayingProperty.value = true;
   }
 
   private updateMeasurements(): void {
@@ -329,7 +358,7 @@ export class OscilloscopeScreenView extends ScreenView {
     let min = Number.POSITIVE_INFINITY;
     let max = Number.NEGATIVE_INFINITY;
     let sumSquares = 0;
-    const signed = new Float32Array(n);
+    const signed = this.signedBuffer;
     for (let i = 0; i < n; i++) {
       const v = sign * (buffer[i] ?? 0);
       signed[i] = v;
@@ -350,13 +379,7 @@ export class OscilloscopeScreenView extends ScreenView {
     this.measuredRiseTime.value = estimateRiseTime(signed, model.timeWindow);
     this.measuredFallTime.value = estimateFallTime(signed, model.timeWindow);
 
-    const primaryInput = model.primaryChannel.inputProperty.value;
-    const audioPrimary = primaryInput === "microphone";
-    const hz = audioPrimary
-      ? estimateFrequency(signed, model.timeWindow)
-      : primaryInput === "none"
-        ? 0
-        : model.functionGenerator.frequencyProperty.value;
+    const hz = this.measureFrequency(signed);
     this.measuredFrequency.value = hz;
     this.measuredPeriod.value = hz > 0 ? 1 / hz : 0;
 
@@ -377,10 +400,33 @@ export class OscilloscopeScreenView extends ScreenView {
     this.measuredDeltaFrequency.value = Math.abs(f2 - f1);
   }
 
+  /**
+   * The frequency to report for the primary channel.
+   *
+   * The generator's own setting is exact and noise-free, so it is preferred — but
+   * only when the channel is actually showing that signal. A grounded channel
+   * displays a flat line and must read as unmeasurable rather than quietly echoing
+   * the knob, and the noise waveform has no single frequency to echo, so both fall
+   * through to measuring whatever is on screen.
+   */
+  private measureFrequency(signed: Float32Array): number {
+    const model = this.model;
+    const channel = model.primaryChannel;
+    const input = channel.inputProperty.value;
+    if (input === "none" || channel.couplingProperty.value === "GND") {
+      return 0;
+    }
+    if (input === "microphone" || model.functionGenerator.waveformProperty.value === "noise") {
+      return estimateFrequency(signed, model.timeWindow);
+    }
+    return model.functionGenerator.frequencyProperty.value;
+  }
+
   private updatePhaseMeasurement(): void {
     const model = this.model;
+    // Negative reads as "—" in the readout: no second trace, nothing to compare.
     if (!(model.ch1.enabledProperty.value && model.ch2.enabledProperty.value)) {
-      this.measuredPhase.value = 0;
+      this.measuredPhase.value = -1;
       return;
     }
     // Prefer the generator phase when both channels are FG A/B — exact and noise-free.
@@ -399,8 +445,14 @@ export class OscilloscopeScreenView extends ScreenView {
     // filled this frame; estimate phase from the two captured traces.
     const s1 = model.ch1.invertedProperty.value ? -1 : 1;
     const s2 = model.ch2.invertedProperty.value ? -1 : 1;
-    const a = Float32Array.from(model.ch1CleanTrace, (v) => s1 * v);
-    const b = Float32Array.from(model.ch2CleanTrace, (v) => s2 * v);
+    const ch1 = model.ch1CleanTrace;
+    const ch2 = model.ch2CleanTrace;
+    const a = this.phaseBufferA;
+    const b = this.phaseBufferB;
+    for (let i = 0; i < a.length; i++) {
+      a[i] = s1 * (ch1[i] ?? 0);
+      b[i] = s2 * (ch2[i] ?? 0);
+    }
     this.measuredPhase.value = estimatePhaseDegrees(a, b, model.timeWindow);
   }
 
@@ -487,15 +539,12 @@ export class OscilloscopeScreenView extends ScreenView {
   }
 
   public reset(): void {
-    this.measuredFrequency.reset();
-    this.measuredPeriod.reset();
-    this.measuredVpp.reset();
-    this.measuredVrms.reset();
-    this.measuredVmax.reset();
-    this.measuredVmin.reset();
-    this.measuredDeltaTime.reset();
-    this.measuredCursorFrequency.reset();
-    this.measuredDeltaVoltage.reset();
+    // Every measured Property is recomputed from the fresh capture below, so the
+    // resets only matter for the brief moment in between — but leaving any of them
+    // out would strand a stale reading if that recompute ever short-circuits.
+    for (const property of this.measuredProperties) {
+      property.reset();
+    }
     this.model.refresh();
     this.redraw();
   }
@@ -511,11 +560,10 @@ export class OscilloscopeScreenView extends ScreenView {
     }
   }
 
-  public override dispose(): void {
-    for (const property of this.renderInputs) {
-      property.unlink(this.markRedrawDirty);
-    }
-    this.renderInputs.length = 0;
-    super.dispose();
-  }
+  // No dispose() override: joist's ScreenView is deliberately not disposable — its
+  // setPDOMOrder() throws, so Node.dispose() cannot complete and any override that
+  // called super.dispose() would throw instead of tearing anything down. The screen
+  // view and the model share the sim's lifetime, so there is nothing here to
+  // release; the components below it (panels, patch layer, display node) each own
+  // a DisposalBag and are covered by the memory-leak suite.
 }

@@ -11,6 +11,7 @@
 import type { TReadOnlyProperty } from "scenerystack/axon";
 import { Node, Rectangle, Text, type TPaint, VBox } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
+import type { DisposalBag } from "../../common/DisposalBag.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
 import { PANEL_CORNER_RADIUS } from "../../SimConstants.js";
 
@@ -27,6 +28,12 @@ export type SectionHeaderOptions = {
   textColor?: TPaint;
   /** Header label font. */
   font?: PhetFont;
+  /**
+   * Teardown collector of the panel that owns this header. The strip keeps bounds
+   * links and a localized `Text` alive, so a panel that can be disposed should pass
+   * its bag; omit it for a header that lives as long as the sim.
+   */
+  bag?: DisposalBag;
 };
 
 /**
@@ -56,8 +63,15 @@ export function withSectionHeader(
     label.centerX = width / 2;
     label.centerY = HEADER_HEIGHT / 2;
   };
-  body.boundsProperty.link(layout);
-  label.boundsProperty.link(layout);
+  const bag = options?.bag;
+  if (bag) {
+    bag.link(body.boundsProperty, layout);
+    bag.link(label.boundsProperty, layout);
+    bag.own(label, bar, header);
+  } else {
+    body.boundsProperty.link(layout);
+    label.boundsProperty.link(layout);
+  }
 
   return new VBox({ align: "center", spacing: 7, children: [header, body] });
 }

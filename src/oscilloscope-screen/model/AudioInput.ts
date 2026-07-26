@@ -49,6 +49,17 @@ export class AudioInput {
     return this.statusProperty.value === "active" && this.analyser !== null;
   }
 
+  /**
+   * The longest sweep (seconds) this input can actually fill. An `AnalyserNode`
+   * only ever hands back its most recent `fftSize` samples, so anything longer
+   * would have to be stretched across the display — the oscilloscope clamps its
+   * timebase to this instead. Reported at the live context's sample rate, so it
+   * tracks the hardware once the microphone starts.
+   */
+  public get maxWindowSeconds(): number {
+    return this.timeData.length / this.sampleRate;
+  }
+
   private static getAudioContextConstructor(): AudioContextConstructor | undefined {
     if (typeof window === "undefined") {
       return undefined;
@@ -127,6 +138,11 @@ export class AudioInput {
    * stabilises the displayed waveform. Values are in [-1, 1] and treated as volts
    * by the oscilloscope. When no live signal is available, `out` is zeroed.
    *
+   * `windowSeconds` beyond {@link maxWindowSeconds} cannot be honoured — the
+   * samples simply do not exist — so the capture is clamped. Callers are expected
+   * to hold their timebase inside that limit (the model does) rather than let a
+   * graticule claim time the capture does not hold.
+   *
    * @returns true when a trigger event was found in the captured samples. The
    *   model uses this to decide whether a `normal` / `single` sweep may update;
    *   a flat line (no microphone) never counts as triggered.
@@ -147,13 +163,19 @@ export class AudioInput {
     const total = this.timeData.length;
     const windowSamples = Math.min(total, Math.max(2, Math.round(windowSeconds * this.sampleRate)));
 
-    // Trigger: start at the first crossing of `level` with the requested slope in
-    // the leading part of the buffer so a periodic signal appears to stand still.
-    // Fall back to index 0.
-    let start = 0;
+    // The crossing is centred on the display, so a usable trigger point needs half
+    // a window of samples behind it and half ahead. Searching that range — rather
+    // than a fixed slice of the front of the buffer — is what keeps the search span
+    // open as the window grows: the old bound went to zero once the window reached
+    // half the buffer, which silently refused every trigger (and so froze NORMAL and
+    // SINGLE) on exactly the slow sweeps the analyser can still fill.
+    const half = Math.floor(windowSamples / 2);
+    const searchFrom = Math.max(1, half);
+    const searchTo = Math.min(total - 1, total - windowSamples + half);
+
+    let start = half;
     let triggered = false;
-    const searchLimit = Math.min(total - windowSamples, Math.floor(total / 2));
-    for (let i = 1; i < searchLimit; i++) {
+    for (let i = searchFrom; i <= searchTo; i++) {
       const prev = this.timeData[i - 1] ?? 0;
       const curr = this.timeData[i] ?? 0;
       const crossed = slope === "rising" ? prev < level && curr >= level : prev > level && curr <= level;
@@ -164,10 +186,9 @@ export class AudioInput {
       }
     }
 
-    // Center the trigger crossing on the display, as on a real scope: read the
-    // window starting half a window before the crossing. Indices are clamped, so
-    // a crossing very early in the buffer simply repeats the earliest sample.
-    const half = Math.floor(windowSamples / 2);
+    // Read the window starting half a window before the crossing, as on a real
+    // scope. Indices are clamped, so a window longer than the acquisition memory
+    // simply repeats the edge samples rather than reading past the buffer.
     const lastOut = out.length - 1;
     const lastWin = windowSamples - 1;
     for (let j = 0; j < out.length; j++) {

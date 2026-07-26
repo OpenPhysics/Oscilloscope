@@ -19,6 +19,7 @@ import {
   FG_DEFAULT_FREQUENCY,
   HORIZONTAL_DIVISIONS,
   SCOPE_MAGNIFY_FACTOR,
+  SCOPE_TIME_PER_DIV_STEPS,
   TRACE_SAMPLE_COUNT,
 } from "../src/SimConstants.js";
 
@@ -425,6 +426,237 @@ describe("OscilloscopeModel", () => {
       model.refresh();
       expect(model.trigger.armedProperty.value).toBe(false);
       expect(model.timer.isPlayingProperty.value).toBe(false);
+      model.dispose();
+    });
+  });
+
+  describe("the trigger watches what the channel displays", () => {
+    /** Volts at the centre column — the sample the trigger event is aligned to. */
+    function centreSample(model: OscilloscopeModel): number {
+      const buffer = model.ch1CleanTrace;
+      return buffer[Math.floor(buffer.length / 2)] ?? 0;
+    }
+
+    /** Whether one more refresh changed the captured sweep. */
+    function sweepAdvances(model: OscilloscopeModel, mutate: () => void): boolean {
+      const before = Array.from(model.ch1CleanTrace);
+      mutate();
+      model.refresh();
+      const after = model.ch1CleanTrace;
+      return before.some((v, i) => Math.abs(v - (after[i] ?? 0)) > 1e-6);
+    }
+
+    it("fires an AC-coupled channel at the level shown on screen, not the raw one", () => {
+      // The raw signal swings 2 V … 4 V; AC coupling centres the trace on 0 V, so a
+      // 0 V trigger level is sitting right on the displayed waveform and must fire.
+      const model = new OscilloscopeModel();
+      const fg = model.functionGenerator;
+      fg.waveformProperty.value = "sine";
+      fg.frequencyProperty.value = 200;
+      fg.amplitudeProperty.value = 1;
+      fg.offsetProperty.value = 3;
+      model.ch1.couplingProperty.value = "AC";
+      model.trigger.levelProperty.value = 0;
+      model.trigger.modeProperty.value = "normal";
+      model.refresh();
+
+      expect(
+        sweepAdvances(model, () => {
+          fg.frequencyProperty.value = 350;
+        }),
+      ).toBe(true);
+      model.dispose();
+    });
+
+    it("aligns a DC-coupled capture exactly to the trigger level", () => {
+      const model = new OscilloscopeModel();
+      const fg = model.functionGenerator;
+      fg.waveformProperty.value = "sine";
+      fg.frequencyProperty.value = 200;
+      fg.amplitudeProperty.value = 1;
+      fg.offsetProperty.value = 0;
+      model.ch1.couplingProperty.value = "DC";
+      model.trigger.levelProperty.value = 0.5;
+      model.refresh();
+
+      // The buffer has an even sample count, so the nearest column sits half a
+      // sample past the trigger instant — a few millivolts at this slew rate.
+      expect(Math.abs(centreSample(model) - 0.5)).toBeLessThan(0.02);
+      model.dispose();
+    });
+
+    it("aligns an AC-coupled capture to the level in displayed volts", () => {
+      const model = new OscilloscopeModel();
+      const fg = model.functionGenerator;
+      fg.waveformProperty.value = "sine";
+      fg.frequencyProperty.value = 200;
+      fg.amplitudeProperty.value = 1;
+      fg.offsetProperty.value = 3; // raw signal swings 2 V … 4 V
+      model.ch1.couplingProperty.value = "AC";
+      model.trigger.levelProperty.value = 0.5;
+      model.refresh();
+
+      // The comparator taps the signal ahead of the coupling network, exactly as a
+      // bench scope does, so the capture lands within that network's phase lead of
+      // the level: atan(1/ωτ) ≈ 4.6° here, worth ≈ 70 mV on a 1 V sine. What must
+      // not come back is the old behaviour, where the comparator compared a 0.5 V
+      // level against the un-shifted 2 V … 4 V signal and never fired at all.
+      expect(centreSample(model)).toBeGreaterThan(0.4);
+      expect(centreSample(model)).toBeLessThan(0.6);
+      model.dispose();
+    });
+
+    it("fires an inverted channel on a rising edge of the drawn trace", () => {
+      const model = new OscilloscopeModel();
+      const fg = model.functionGenerator;
+      fg.waveformProperty.value = "sine";
+      fg.frequencyProperty.value = 200;
+      fg.amplitudeProperty.value = 1;
+      model.trigger.levelProperty.value = 0;
+      model.trigger.slopeProperty.value = "rising";
+      model.ch1.invertedProperty.value = true;
+      model.refresh();
+
+      // The view draws -1 × the buffer for an inverted channel.
+      const buffer = model.ch1CleanTrace;
+      const mid = Math.floor(buffer.length / 2);
+      const drawnBefore = -(buffer[mid - 2] ?? 0);
+      const drawnAfter = -(buffer[mid + 2] ?? 0);
+      expect(drawnAfter).toBeGreaterThan(drawnBefore);
+      model.dispose();
+    });
+
+    it("holds a NORMAL sweep when the trigger channel is grounded", () => {
+      const model = new OscilloscopeModel();
+      model.functionGenerator.frequencyProperty.value = 200;
+      model.trigger.modeProperty.value = "normal";
+      model.refresh();
+
+      expect(
+        sweepAdvances(model, () => {
+          model.ch1.couplingProperty.value = "GND";
+          model.functionGenerator.amplitudeProperty.value = 4;
+        }),
+      ).toBe(false);
+      model.dispose();
+    });
+  });
+
+  describe("microphone acquisition memory", () => {
+    it("clamps the timebase to the window the analyser can fill", () => {
+      const model = new OscilloscopeModel();
+      const limit = model.microphoneMaxTimePerDivision;
+      expect(limit).toBeGreaterThan(0);
+
+      model.timePerDivisionProperty.value = 0.5;
+      model.connectJack(1, "microphone");
+      expect(model.timePerDivisionProperty.value).toBeLessThanOrEqual(limit);
+      expect(SCOPE_TIME_PER_DIV_STEPS).toContain(model.timePerDivisionProperty.value);
+
+      // Turning the knob past the limit while patched is pulled straight back.
+      model.timePerDivisionProperty.value = 0.2;
+      expect(model.timePerDivisionProperty.value).toBeLessThanOrEqual(limit);
+      model.dispose();
+    });
+
+    it("leaves the timebase alone once the microphone is unpatched", () => {
+      const model = new OscilloscopeModel();
+      model.connectJack(1, "microphone");
+      model.disconnectChannel(1);
+      model.timePerDivisionProperty.value = 0.5;
+      expect(model.timePerDivisionProperty.value).toBe(0.5);
+      model.dispose();
+    });
+
+    it("the ×10 magnifier buys back the sweeps it shortens", () => {
+      const model = new OscilloscopeModel();
+      const unmagnified = model.microphoneMaxTimePerDivision;
+      model.magnifyProperty.value = true;
+      expect(model.microphoneMaxTimePerDivision).toBeCloseTo(unmagnified * SCOPE_MAGNIFY_FACTOR, 9);
+      model.dispose();
+    });
+  });
+
+  describe("AC coupling accuracy", () => {
+    it("holds the baseline at every timebase, including the fastest sweeps", () => {
+      // The high-pass is settled by solving its periodic steady state in closed
+      // form. A period-blind warm-up has to alias a fast carrier instead, which
+      // left ~30 mV of baseline offset here.
+      const model = new OscilloscopeModel();
+      const fg = model.functionGenerator;
+      fg.amplitudeProperty.value = 1;
+      fg.offsetProperty.value = 2;
+      model.ch1.couplingProperty.value = "AC";
+
+      for (const [waveform, frequency, timePerDivision] of [
+        ["sine", 200, 0.001],
+        ["sine", 2000, 0.0001],
+        ["sine", 20000, 0.00001],
+        ["square", 20000, 0.00001],
+        ["triangle", 5000, 0.00002],
+      ] as const) {
+        fg.waveformProperty.value = waveform;
+        fg.frequencyProperty.value = frequency;
+        model.timePerDivisionProperty.value = timePerDivision;
+        model.refresh();
+
+        let sum = 0;
+        for (const v of model.ch1CleanTrace) {
+          sum += v;
+        }
+        const mean = sum / model.ch1CleanTrace.length;
+        expect(Math.abs(mean), `${waveform} at ${frequency} Hz, ${timePerDivision} s/div`).toBeLessThan(1e-3);
+      }
+      model.dispose();
+    });
+
+    it("still droops a signal slow enough to fall near the coupling corner", () => {
+      // 50 Hz against a 10 ms time constant is genuinely inside the high-pass's
+      // skirt: a real AC-coupled scope tilts this trace, and so must this one.
+      const model = new OscilloscopeModel();
+      const fg = model.functionGenerator;
+      fg.waveformProperty.value = "square";
+      fg.frequencyProperty.value = 50;
+      fg.amplitudeProperty.value = 1;
+      fg.offsetProperty.value = 0;
+      model.ch1.couplingProperty.value = "AC";
+      model.timePerDivisionProperty.value = 0.005;
+      model.refresh();
+
+      const trace = model.ch1CleanTrace;
+      const first = trace[0] ?? 0;
+      let maxDroop = 0;
+      for (let i = 0; i < 40; i++) {
+        maxDroop = Math.max(maxDroop, Math.abs((trace[i] ?? 0) - first));
+      }
+      expect(maxDroop).toBeGreaterThan(0.01);
+      model.dispose();
+    });
+  });
+
+  describe("captureSingle", () => {
+    it("selects SINGLE, arms, and starts the sweep clock", () => {
+      const model = new OscilloscopeModel();
+      model.timer.isPlayingProperty.value = false;
+      model.captureSingle();
+      expect(model.trigger.modeProperty.value).toBe("single");
+      expect(model.trigger.armedProperty.value).toBe(true);
+      expect(model.timer.isPlayingProperty.value).toBe(true);
+      model.dispose();
+    });
+
+    it("re-arms a scope that already took its capture", () => {
+      const model = new OscilloscopeModel();
+      model.functionGenerator.frequencyProperty.value = 200;
+      model.trigger.levelProperty.value = 0;
+      model.captureSingle();
+      model.refresh();
+      expect(model.trigger.armedProperty.value).toBe(false);
+      expect(model.timer.isPlayingProperty.value).toBe(false);
+
+      model.captureSingle();
+      expect(model.trigger.armedProperty.value).toBe(true);
+      expect(model.timer.isPlayingProperty.value).toBe(true);
       model.dispose();
     });
   });

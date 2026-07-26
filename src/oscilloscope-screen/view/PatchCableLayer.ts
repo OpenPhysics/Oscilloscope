@@ -10,6 +10,7 @@ import { DerivedProperty } from "scenerystack/axon";
 import type { Vector2 } from "scenerystack/dot";
 import { Shape } from "scenerystack/kite";
 import { DragListener, Node, Path, type TPaint } from "scenerystack/scenery";
+import { DisposalBag } from "../../common/DisposalBag.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
 import type { ChannelInput, SignalJack } from "../model/ChannelInput.js";
@@ -41,8 +42,9 @@ export type PatchCableLayerOptions = {
 };
 
 /**
- * Owns the six jack nodes (3 sources + 2 BNCs) is wrong — 3 sources + 2 BNCs = 5.
- * Exposes them for layout by the screen view / panels.
+ * Owns the five jack nodes — the generator's OUT A / OUT B / MIC sources and the
+ * scope's CH1 / CH2 BNC inputs — and exposes them so the screen view and the
+ * vertical panel can lay them out in place.
  */
 export class PatchCableLayer extends Node {
   public readonly sourceJackA: BncJackNode;
@@ -53,6 +55,7 @@ export class PatchCableLayer extends Node {
 
   private readonly model: OscilloscopeModel;
   private readonly coordinateFrame: Node;
+  private readonly bag = new DisposalBag();
   private readonly wireLayer = new Node();
   private readonly draftWire = new Path(null, {
     stroke: OscilloscopeColors.wireFgAColorProperty,
@@ -72,8 +75,19 @@ export class PatchCableLayer extends Node {
     const a11y = strings.getA11yStrings().controls;
     const model = options.model;
 
-    const connectedTo = (jack: SignalJack) =>
-      new DerivedProperty([model.ch1.inputProperty, model.ch2.inputProperty], (a, b) => a === jack || b === jack);
+    const connectedTo = (jack: SignalJack) => {
+      const derived = new DerivedProperty(
+        [model.ch1.inputProperty, model.ch2.inputProperty],
+        (a, b) => a === jack || b === jack,
+      );
+      this.bag.own(derived);
+      return derived;
+    };
+    const patchedTo = (channelInput: typeof model.ch1.inputProperty) => {
+      const derived = new DerivedProperty([channelInput], (input) => input !== "none");
+      this.bag.own(derived);
+      return derived;
+    };
 
     this.sourceJackA = new BncJackNode({
       labelStringProperty: patch.outAStringProperty,
@@ -102,7 +116,7 @@ export class PatchCableLayer extends Node {
 
     this.ch1Bnc = new BncJackNode({
       labelStringProperty: patch.ch1BncStringProperty,
-      connectedProperty: new DerivedProperty([model.ch1.inputProperty], (input) => input !== "none"),
+      connectedProperty: patchedTo(model.ch1.inputProperty),
       accessibleName: a11y.ch1BncStringProperty,
       accessibleHelpText: a11y.patchHelpStringProperty,
       pinFill: OscilloscopeColors.channel1ColorProperty,
@@ -110,7 +124,7 @@ export class PatchCableLayer extends Node {
     });
     this.ch2Bnc = new BncJackNode({
       labelStringProperty: patch.ch2BncStringProperty,
-      connectedProperty: new DerivedProperty([model.ch2.inputProperty], (input) => input !== "none"),
+      connectedProperty: patchedTo(model.ch2.inputProperty),
       accessibleName: a11y.ch2BncStringProperty,
       accessibleHelpText: a11y.patchHelpStringProperty,
       pinFill: OscilloscopeColors.channel2ColorProperty,
@@ -125,10 +139,11 @@ export class PatchCableLayer extends Node {
     this.attachSourceDrag(this.sourceJackMic, "microphone");
 
     const redraw = () => this.redrawWires();
-    model.ch1.inputProperty.link(redraw);
-    model.ch2.inputProperty.link(redraw);
+    this.bag.link(model.ch1.inputProperty, redraw);
+    this.bag.link(model.ch2.inputProperty, redraw);
     // Layout moves jacks; redraw after the frame settles.
-    this.coordinateFrame.boundsProperty.lazyLink(redraw);
+    this.bag.lazyLink(this.coordinateFrame.boundsProperty, redraw);
+    this.bag.own(this.sourceJackA, this.sourceJackB, this.sourceJackMic, this.ch1Bnc, this.ch2Bnc, this.draftWire);
   }
 
   /** Call after the screen has finished positioning the jack nodes. */
@@ -242,11 +257,18 @@ export class PatchCableLayer extends Node {
         this.redrawWires();
       },
     });
-    jackNode.addInputListener(dragListener);
+    this.bag.addInputListener(jackNode, dragListener);
   }
 
   private hitBnc(bnc: BncJackNode, globalPoint: Vector2): boolean {
     const center = bnc.getJackGlobalCenter();
     return center.distance(globalPoint) < 36;
+  }
+
+  public override dispose(): void {
+    this.bag.dispose();
+    this.wireLayer.removeAllChildren();
+    this.wireLayer.dispose();
+    super.dispose();
   }
 }

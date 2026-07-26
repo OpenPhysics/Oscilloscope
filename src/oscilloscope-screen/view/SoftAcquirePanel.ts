@@ -10,6 +10,7 @@
 import type { TProperty } from "scenerystack/axon";
 import { HBox, type Node, VBox } from "scenerystack/scenery";
 import { PanelButton } from "../../common/controls/PanelButton.js";
+import { DisposalBag } from "../../common/DisposalBag.js";
 import { SimPanel } from "../../common/SimPanel.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
@@ -28,7 +29,10 @@ export type SoftAcquirePanelOptions = {
 export class SoftAcquirePanel extends SimPanel {
   public readonly controlsInOrder: Node[];
 
+  private readonly bag: DisposalBag;
+
   public constructor(model: OscilloscopeModel, options: SoftAcquirePanelOptions) {
+    const bag = new DisposalBag();
     const strings = StringManager.getInstance();
     const acq = strings.getAcquisition();
     const a11y = strings.getA11yStrings().controls;
@@ -142,7 +146,7 @@ export class SoftAcquirePanel extends SimPanel {
       children: [softKeyGrid, acquireColumn],
     });
 
-    super(withSectionHeader(acq.titleStringProperty, body), { xMargin: 10, yMargin: 8 });
+    super(withSectionHeader(acq.titleStringProperty, body, { bag }), { xMargin: 10, yMargin: 8 });
 
     this.controlsInOrder = [
       cursorButton,
@@ -155,5 +159,13 @@ export class SoftAcquirePanel extends SimPanel {
       singleButton,
       autosetButton,
     ];
+
+    this.bag = bag;
+    this.bag.own(...this.controlsInOrder);
+  }
+
+  public override dispose(): void {
+    this.bag.dispose();
+    super.dispose();
   }
 }
