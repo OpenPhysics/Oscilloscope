@@ -37,9 +37,11 @@ it keeps that template's **canonical accessibility** wiring. For multi-screen si
   automatic measurements read a parallel noiseless one. Vmax/Vmin/Vpp are extreme-value statistics,
   so measuring the noisy trace biased Vpp outward by roughly the noise amplitude.
 - **AC coupling subtracts the signal's analytic DC** (`FunctionGenerator.meanVoltage`, backed by
-  `waveformMean()`), not the mean of the visible window. A window mean depends on how many cycles
-  the current time/div happens to show, which made an asymmetric waveform's baseline jump whenever
-  the timebase knob moved. GND flattens the channel to zero.
+ `waveformMean()`), then applies a first-order high-pass (`AC_COUPLING_TIME_CONSTANT` ≈ 10 ms) so
+ square-wave tops droop like a real scope. Subtracting a *window* mean is avoided because that
+ depends on how many cycles the current time/div shows. GND flattens the channel to zero.
+- **Probe ×1/×10** per channel multiplies the effective volts/div used for drawing and ΔV (tip-voltage
+ buffers are unchanged), matching a DSO told a ×10 probe is attached.
 - **View** redraws in `OscilloscopeScreenView.step()`, but only **resamples** while running — a
   stopped scope freezes the captured buffer, yet still rescales it live when you turn volts/div or
   position, like a real STOP. Redrawing rebuilds a `Shape` per visible trace, so it is gated on a
@@ -83,8 +85,11 @@ it keeps that template's **canonical accessibility** wiring. For multi-screen si
 | `src/oscilloscope-screen/view/VerticalControlPanel.ts` | Per-channel volts/div, position, coupling, invert, on/off |
 | `src/oscilloscope-screen/view/HorizontalControlPanel.ts` | Time/div, position, ×10 magnify, X-Y |
 | `src/oscilloscope-screen/view/TriggerControlPanel.ts` | Trigger source / level / slope / mode |
-| `src/oscilloscope-screen/view/AcquisitionPanel.ts` | Run/Stop, Single, Autoset, Persist, Math |
+| `src/oscilloscope-screen/view/SoftAcquirePanel.ts` | Cursor, Measure, Lab, Run/Stop, Single, Autoset, Persist, export |
+| `src/oscilloscope-screen/view/labActivities.ts` | Guided lab presets (Vpp, Normal trigger, 3rd harmonic, Lissajous) |
+| `src/oscilloscope-screen/view/LabActivitiesDialog.ts` | Soft-key Lab dialog that applies a preset |
 | `src/oscilloscope-screen/view/controlHelpers.ts` | Switch-item + readout-string factories for the panels |
+| `src/oscilloscope-screen/view/panelSection.ts` | `withSectionHeader()` — wraps a panel body in a bench-instrument section-header strip (Acquire/Horizontal/Trigger/Vertical, and the generator faceplate) |
 | `src/oscilloscope-screen/view/MeasurementReadoutNode.ts` | On-screen freq / period / Vpp / Vrms / Vmax / Vmin overlay |
 | `src/oscilloscope-screen/view/formatUnits.ts` | Engineering-unit label formatters (mV/V, µs/ms, Hz/kHz, %, °) |
 | `src/oscilloscope-screen/view/OscilloscopeScreenSummaryContent.ts` | Accessible screen summary with **live** current-details |

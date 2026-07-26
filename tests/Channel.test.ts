@@ -17,6 +17,8 @@ describe("Channel", () => {
     expect(ch.couplingProperty.value).toBe("DC");
     expect(ch.invertedProperty.value).toBe(false);
     expect(ch.positionProperty.value).toBe(0);
+    expect(ch.probeProperty.value).toBe(1);
+    expect(ch.effectiveVoltsPerDivision).toBe(0.1);
     ch.dispose();
   });
 
@@ -24,6 +26,7 @@ describe("Channel", () => {
     const ch = new Channel({ index: 1, initiallyEnabled: true, initialVoltsPerDivision: 0.5 });
     ch.enabledProperty.value = false;
     ch.voltsPerDivisionProperty.value = 2;
+    ch.probeProperty.value = 10;
     ch.positionProperty.value = 3;
     ch.couplingProperty.value = "AC";
     ch.invertedProperty.value = true;
@@ -32,9 +35,17 @@ describe("Channel", () => {
 
     expect(ch.enabledProperty.value).toBe(true);
     expect(ch.voltsPerDivision).toBe(0.5);
+    expect(ch.probeProperty.value).toBe(1);
     expect(ch.positionProperty.value).toBe(0);
     expect(ch.couplingProperty.value).toBe("DC");
     expect(ch.invertedProperty.value).toBe(false);
+    ch.dispose();
+  });
+
+  it("effectiveVoltsPerDivision multiplies the knob by the probe factor", () => {
+    const ch = new Channel({ index: 1, initiallyEnabled: true, initialVoltsPerDivision: 0.5 });
+    ch.probeProperty.value = 10;
+    expect(ch.effectiveVoltsPerDivision).toBeCloseTo(5);
     ch.dispose();
   });
 });

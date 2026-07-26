@@ -125,6 +125,22 @@ export const SCOPE_TRIGGER_LEVEL_RANGE = new Range(-20, 20); // V
 export const SCOPE_MAGNIFY_FACTOR = 10;
 
 /**
+ * Probe attenuation factors offered on each channel's probe switch (×1 / ×10).
+ * Tip voltage is always what the generator produces; ×10 scales the effective
+ * volts/div so the same tip signal occupies 1/10 as many divisions — matching a
+ * DSO that has been told a ×10 probe is attached.
+ */
+export const SCOPE_PROBE_FACTORS = [1, 10] as const;
+export type ProbeFactor = (typeof SCOPE_PROBE_FACTORS)[number];
+
+/**
+ * Time constant (seconds) of the first-order high-pass that models AC coupling.
+ * ~10 ms puts visible square-wave droop on the default educational timebases
+ * without wiping out mid-audio tones.
+ */
+export const AC_COUPLING_TIME_CONSTANT = 0.01; // s
+
+/**
  * Samples used to scan one waveform period for the trigger crossing. The crossing
  * is then refined by linear interpolation, so this only bounds how narrow a
  * feature (e.g. a very low duty-cycle pulse) can be and still be found.

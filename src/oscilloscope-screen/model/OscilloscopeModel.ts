@@ -26,6 +26,7 @@ import type { TModel } from "scenerystack/joist";
 import { TimeModel } from "../../common/TimeModel.js";
 import OscilloscopeNamespace from "../../OscilloscopeNamespace.js";
 import {
+  AC_COUPLING_TIME_CONSTANT,
   CURSOR_TIME_RANGE,
   CURSOR_VOLT_RANGE,
   HORIZONTAL_DIVISIONS,
@@ -57,7 +58,7 @@ export const MATH_MODES = ["off", "add", "subtract"] as const;
 export type MathMode = (typeof MATH_MODES)[number];
 
 /**
- * The mean of a filled buffer. Used only for the microphone path, where no
+ * The mean of a filled buffer. Used for the microphone AC path, where no
  * analytic DC component exists; the generator path uses `FunctionGenerator.meanVoltage`.
  */
 function windowMean(buffer: Float32Array): number {
@@ -69,6 +70,67 @@ function windowMean(buffer: Float32Array): number {
     sum += v;
   }
   return sum / buffer.length;
+}
+
+/** Bounded number of samples used to settle the AC high-pass before the window. */
+const AC_WARMUP_SAMPLES = 1024;
+
+/**
+ * First-order high-pass filter modelling AC-coupling droop, in place.
+ *
+ * Discrete form: y[i] = α·(y[i−1] + x[i] − x[i−1]) with α = τ/(τ+dt). Callers
+ * should already have removed the DC component so the filter only shapes edges.
+ * Pass `prevX0`/`prevY0` (from {@link warmAcHighPass}) to seed the filter with a
+ * settled state so the visible window is not biased by the startup transient;
+ * omit them to start cold (prevX = first sample, prevY = 0).
+ */
+function applyAcHighPass(buffer: Float32Array, windowSeconds: number, prevX0?: number, prevY0?: number): void {
+  const n = buffer.length;
+  if (n < 2 || windowSeconds <= 0) {
+    buffer.fill(0);
+    return;
+  }
+  const dt = windowSeconds / (n - 1);
+  const alpha = AC_COUPLING_TIME_CONSTANT / (AC_COUPLING_TIME_CONSTANT + dt);
+
+  let prevX = prevX0 ?? buffer[0] ?? 0;
+  let prevY = prevY0 ?? 0;
+
+  for (let i = 0; i < n; i++) {
+    const x = buffer[i] ?? 0;
+    const y = alpha * (prevY + x - prevX);
+    buffer[i] = y;
+    prevX = x;
+    prevY = y;
+  }
+}
+
+/**
+ * Settles the AC high-pass over ~5 time-constants of signal ending at `tEnd`,
+ * returning the filter state `[prevX, prevY]` to seed {@link applyAcHighPass}
+ * for the visible window (whose first sample is at `tEnd`).
+ *
+ * The warm-up steps a fixed, bounded number of samples (`AC_WARMUP_SAMPLES`)
+ * with its own dt and matching α, independent of the timebase. This keeps a fast
+ * sweep cheap — otherwise, at window-resolution, 5τ can span tens of millions of
+ * samples per frame — while still finely settling the filter's slow dynamics.
+ * `sampleAt` must already have the DC component removed.
+ */
+function warmAcHighPass(sampleAt: (t: number) => number, tEnd: number): [number, number] {
+  const warmupSeconds = 5 * AC_COUPLING_TIME_CONSTANT;
+  const dt = warmupSeconds / AC_WARMUP_SAMPLES;
+  const alpha = AC_COUPLING_TIME_CONSTANT / (AC_COUPLING_TIME_CONSTANT + dt);
+  const tStart = tEnd - warmupSeconds;
+
+  let prevX = sampleAt(tStart);
+  let prevY = 0;
+  for (let i = 1; i <= AC_WARMUP_SAMPLES; i++) {
+    const x = sampleAt(tStart + i * dt);
+    prevY = alpha * (prevY + x - prevX);
+    prevX = x;
+  }
+  // The final step lands at tEnd, so prevX is the sample at the window start.
+  return [prevX, prevY];
 }
 
 export type OscilloscopeModelOptions = {
@@ -276,6 +338,14 @@ export class OscilloscopeModel implements TModel {
     return this.primaryIsCh1 ? this.ch1CleanBuffer : this.ch2CleanBuffer;
   }
 
+  public get ch1CleanTrace(): Float32Array {
+    return this.ch1CleanBuffer;
+  }
+
+  public get ch2CleanTrace(): Float32Array {
+    return this.ch2CleanBuffer;
+  }
+
   /**
    * Resamples every trace from the current model state. Call once per frame.
    *
@@ -397,6 +467,7 @@ export class OscilloscopeModel implements TModel {
     const t0 = this.triggerOffsetSeconds;
     const hShift = this.horizontalPositionProperty.value * this.effectiveTimePerDivision;
     const lastIndex = Math.max(1, n - 1);
+    const dcVolts = fg.meanVoltage;
 
     for (let i = 0; i < n; i++) {
       const t = t0 + (i / lastIndex - 0.5) * windowSeconds - hShift;
@@ -405,20 +476,46 @@ export class OscilloscopeModel implements TModel {
       buffer[i] = clean + fg.noiseSample();
     }
 
-    const dcVolts = fg.meanVoltage;
-    this.applyCoupling(buffer, coupling, dcVolts);
-    this.applyCoupling(cleanBuffer, coupling, dcVolts);
+    if (coupling === "GND") {
+      buffer.fill(0);
+      cleanBuffer.fill(0);
+      return;
+    }
+
+    if (coupling === "AC") {
+      // Settle the high-pass on ~5 time-constants of pre-roll so the visible
+      // window is not skewed by the filter's startup transient. Noise is white,
+      // so both traces are warmed on the same clean carrier.
+      const tWindowStart = t0 + (0 / lastIndex - 0.5) * windowSeconds - hShift;
+      const [prevX, prevY] = warmAcHighPass((t) => fg.cleanVoltageAt(t, phaseDegrees) - dcVolts, tWindowStart);
+      for (let i = 0; i < n; i++) {
+        buffer[i] = (buffer[i] ?? 0) - dcVolts;
+        cleanBuffer[i] = (cleanBuffer[i] ?? 0) - dcVolts;
+      }
+      applyAcHighPass(buffer, windowSeconds, prevX, prevY);
+      applyAcHighPass(cleanBuffer, windowSeconds, prevX, prevY);
+      return;
+    }
+
+    // DC: leave as sampled.
   }
 
+  /**
+   * Applies coupling to a microphone buffer in place (generator path handles AC
+   * itself so it can warm the high-pass on analytic pre-roll).
+   */
   private applyCoupling(buffer: Float32Array, coupling: Coupling, dcVolts: number): void {
     if (coupling === "GND") {
       buffer.fill(0);
       return;
     }
-    if (coupling === "AC" && dcVolts !== 0) {
-      for (let i = 0; i < buffer.length; i++) {
-        buffer[i] = (buffer[i] ?? 0) - dcVolts;
+    if (coupling === "AC") {
+      if (dcVolts !== 0) {
+        for (let i = 0; i < buffer.length; i++) {
+          buffer[i] = (buffer[i] ?? 0) - dcVolts;
+        }
       }
+      applyAcHighPass(buffer, this.timeWindow);
     }
   }
 

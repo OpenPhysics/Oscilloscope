@@ -1,8 +1,10 @@
 /**
  * SoftAcquirePanel.ts
  *
- * TBS-style soft / acquire cluster: Cursor, Measure, Help on one row; Run/Stop,
- * Single, Autoset on the next; Persist and export as secondary actions.
+ * TBS-style soft / acquire cluster, laid out like the real bench scope's top
+ * button block: a grid of gray soft-keys (Cursor / Measure / Lab, then Persist /
+ * CSV / PNG) on the left, and the acquisition column — Run/Stop (green), Single,
+ * Autoset — down the right edge.
  */
 
 import type { TProperty } from "scenerystack/axon";
@@ -31,6 +33,9 @@ export class SoftAcquirePanel extends SimPanel {
     const acq = strings.getAcquisition();
     const a11y = strings.getA11yStrings().controls;
 
+    // Left grid of gray soft-keys, sized to a common width so the columns align.
+    const SOFT_KEY_WIDTH = 76;
+
     const cursorButton = new PanelButton({
       labelStringProperty: acq.cursorsStringProperty,
       indicatorProperty: model.cursorsEnabledProperty,
@@ -38,7 +43,7 @@ export class SoftAcquirePanel extends SimPanel {
       listener: () => {
         model.cursorsEnabledProperty.value = !model.cursorsEnabledProperty.value;
       },
-      minWidth: 72,
+      minWidth: SOFT_KEY_WIDTH,
       fontSize: 11,
     });
 
@@ -49,41 +54,16 @@ export class SoftAcquirePanel extends SimPanel {
       listener: () => {
         options.showMeasurementsProperty.value = !options.showMeasurementsProperty.value;
       },
-      minWidth: 72,
+      minWidth: SOFT_KEY_WIDTH,
       fontSize: 11,
     });
 
     const helpButton = new PanelButton({
-      labelStringProperty: acq.helpStringProperty,
-      accessibleName: a11y.helpStringProperty,
+      labelStringProperty: acq.labStringProperty,
+      accessibleName: a11y.labStringProperty,
       listener: options.onHelp,
-      minWidth: 72,
+      minWidth: SOFT_KEY_WIDTH,
       fontSize: 11,
-    });
-
-    const runStopButton = new PanelButton({
-      labelStringProperty: acq.runStopStringProperty,
-      indicatorProperty: model.timer.isPlayingProperty,
-      indicatorColor: OscilloscopeColors.traceColorProperty,
-      accessibleName: a11y.runStopStringProperty,
-      listener: () => {
-        model.timer.isPlayingProperty.value = !model.timer.isPlayingProperty.value;
-      },
-      minWidth: 80,
-    });
-
-    const singleButton = new PanelButton({
-      labelStringProperty: acq.singleStringProperty,
-      accessibleName: a11y.singleStringProperty,
-      listener: options.onSingle,
-      minWidth: 72,
-    });
-
-    const autosetButton = new PanelButton({
-      labelStringProperty: acq.autosetStringProperty,
-      accessibleName: a11y.autosetStringProperty,
-      listener: options.onAutoset,
-      minWidth: 72,
     });
 
     const persistButton = new PanelButton({
@@ -93,7 +73,7 @@ export class SoftAcquirePanel extends SimPanel {
       listener: () => {
         model.persistenceProperty.value = !model.persistenceProperty.value;
       },
-      minWidth: 64,
+      minWidth: SOFT_KEY_WIDTH,
       fontSize: 11,
     });
 
@@ -101,7 +81,7 @@ export class SoftAcquirePanel extends SimPanel {
       labelStringProperty: acq.exportCsvStringProperty,
       accessibleName: a11y.exportCsvStringProperty,
       listener: options.onExportCsv,
-      minWidth: 64,
+      minWidth: SOFT_KEY_WIDTH,
       fontSize: 11,
     });
 
@@ -109,18 +89,57 @@ export class SoftAcquirePanel extends SimPanel {
       labelStringProperty: acq.exportImageStringProperty,
       accessibleName: a11y.exportImageStringProperty,
       listener: options.onExportImage,
-      minWidth: 64,
+      minWidth: SOFT_KEY_WIDTH,
       fontSize: 11,
     });
 
-    const body = new VBox({
+    // Acquisition column down the right edge, led by the green Run/Stop key.
+    const ACQUIRE_KEY_WIDTH = 82;
+
+    const runStopButton = new PanelButton({
+      labelStringProperty: acq.runStopStringProperty,
+      indicatorProperty: model.timer.isPlayingProperty,
+      indicatorColor: OscilloscopeColors.traceColorProperty,
+      accessibleName: a11y.runStopStringProperty,
+      listener: () => {
+        model.timer.isPlayingProperty.value = !model.timer.isPlayingProperty.value;
+      },
+      minWidth: ACQUIRE_KEY_WIDTH,
+    });
+
+    const singleButton = new PanelButton({
+      labelStringProperty: acq.singleStringProperty,
+      accessibleName: a11y.singleStringProperty,
+      listener: options.onSingle,
+      minWidth: ACQUIRE_KEY_WIDTH,
+    });
+
+    const autosetButton = new PanelButton({
+      labelStringProperty: acq.autosetStringProperty,
+      accessibleName: a11y.autosetStringProperty,
+      listener: options.onAutoset,
+      minWidth: ACQUIRE_KEY_WIDTH,
+    });
+
+    const softKeyGrid = new VBox({
       align: "center",
-      spacing: 8,
+      spacing: 6,
       children: [
         new HBox({ spacing: 6, children: [cursorButton, measureButton, helpButton] }),
-        new HBox({ spacing: 6, children: [runStopButton, singleButton, autosetButton] }),
         new HBox({ spacing: 6, children: [persistButton, exportCsvButton, exportImageButton] }),
       ],
+    });
+
+    const acquireColumn = new VBox({
+      align: "center",
+      spacing: 6,
+      children: [runStopButton, singleButton, autosetButton],
+    });
+
+    const body = new HBox({
+      align: "top",
+      spacing: 12,
+      children: [softKeyGrid, acquireColumn],
     });
 
     super(withSectionHeader(acq.titleStringProperty, body), { xMargin: 10, yMargin: 8 });
@@ -129,12 +148,12 @@ export class SoftAcquirePanel extends SimPanel {
       cursorButton,
       measureButton,
       helpButton,
-      runStopButton,
-      singleButton,
-      autosetButton,
       persistButton,
       exportCsvButton,
       exportImageButton,
+      runStopButton,
+      singleButton,
+      autosetButton,
     ];
   }
 }

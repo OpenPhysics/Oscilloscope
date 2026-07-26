@@ -16,7 +16,7 @@ type CrossingSpan = {
 };
 
 /** The arithmetic mean of `buffer` (0 for an empty buffer). */
-function meanOf(buffer: Float32Array): number {
+export function meanOf(buffer: Float32Array): number {
   if (buffer.length === 0) {
     return 0;
   }
@@ -110,6 +110,120 @@ export function estimateFrequency(buffer: Float32Array, windowSeconds: number): 
   // cycles on screen, where those edges land on the window boundaries).
   // Consecutive crossings are half a period apart for a symmetric waveform.
   return frequencyFrom(all, 0.5);
+}
+
+/**
+ * Estimates duty cycle (high-time fraction in [0, 1]) from a buffer by measuring
+ * the fraction of samples above the mean. Returns 0 for a flat or empty buffer.
+ */
+export function estimateDutyCycle(buffer: Float32Array): number {
+  if (buffer.length === 0) {
+    return 0;
+  }
+  const mean = meanOf(buffer);
+  let high = 0;
+  let swings = false;
+  for (const v of buffer) {
+    if (v > mean) {
+      high++;
+    }
+    if (v !== mean) {
+      swings = true;
+    }
+  }
+  return swings ? high / buffer.length : 0;
+}
+
+/**
+ * 10%–90% rise time (seconds) of the first rising edge found in `buffer`.
+ * Returns 0 when no qualifying edge exists.
+ */
+export function estimateRiseTime(buffer: Float32Array, windowSeconds: number): number {
+  return estimateEdgeTime(buffer, windowSeconds, "rise");
+}
+
+/** 90%–10% fall time (seconds) of the first falling edge found in `buffer`. */
+export function estimateFallTime(buffer: Float32Array, windowSeconds: number): number {
+  return estimateEdgeTime(buffer, windowSeconds, "fall");
+}
+
+/** Locates the first index where `buffer` crosses `level` in the given direction. */
+function crossingIndex(buffer: Float32Array, level: number, rising: boolean, fromIndex: number): number {
+  for (let i = Math.max(1, fromIndex); i < buffer.length; i++) {
+    const prev = buffer[i - 1] ?? 0;
+    const curr = buffer[i] ?? 0;
+    if (rising ? prev < level && curr >= level : prev > level && curr <= level) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function interpolateCrossing(buffer: Float32Array, i: number, level: number): number {
+  const prev = buffer[i - 1] ?? 0;
+  const curr = buffer[i] ?? 0;
+  return i - 1 + (level - prev) / (curr - prev || 1);
+}
+
+function estimateEdgeTime(buffer: Float32Array, windowSeconds: number, kind: "rise" | "fall"): number {
+  const n = buffer.length;
+  if (n < 2 || windowSeconds <= 0) {
+    return 0;
+  }
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  for (const v of buffer) {
+    min = Math.min(min, v);
+    max = Math.max(max, v);
+  }
+  const span = max - min;
+  if (!(span > 0)) {
+    return 0;
+  }
+  const lo = min + 0.1 * span;
+  const hi = min + 0.9 * span;
+  const rising = kind === "rise";
+  const startLevel = rising ? lo : hi;
+  const endLevel = rising ? hi : lo;
+  const startAt = crossingIndex(buffer, startLevel, rising, 1);
+  if (startAt < 0) {
+    return 0;
+  }
+  const endAt = crossingIndex(buffer, endLevel, rising, startAt);
+  if (endAt < 0) {
+    return 0;
+  }
+  const start = interpolateCrossing(buffer, startAt, startLevel);
+  const end = interpolateCrossing(buffer, endAt, endLevel);
+  return Math.max(0, (end - start) * (windowSeconds / (n - 1)));
+}
+
+/**
+ * Phase of `b` relative to `a`, in degrees on [0, 360). Uses the delay between
+ * corresponding rising mean-crossings. Returns 0 when either buffer lacks a
+ * usable period.
+ */
+export function estimatePhaseDegrees(a: Float32Array, b: Float32Array, windowSeconds: number): number {
+  if (a.length < 2 || b.length < 2 || a.length !== b.length || windowSeconds <= 0) {
+    return 0;
+  }
+  const freq = estimateFrequency(a, windowSeconds);
+  if (freq <= 0) {
+    return 0;
+  }
+  const periodSamples = (a.length - 1) / (freq * windowSeconds);
+  if (!(periodSamples > 0)) {
+    return 0;
+  }
+  const aRising = findMeanCrossings(a, meanOf(a)).rising;
+  const bRising = findMeanCrossings(b, meanOf(b)).rising;
+  if (aRising.count < 1 || bRising.count < 1) {
+    return 0;
+  }
+  let delta = bRising.first - aRising.first;
+  // Wrap into [0, period).
+  delta = ((delta % periodSamples) + periodSamples) % periodSamples;
+  return (delta / periodSamples) * 360;
 }
 
 /** The value in `steps` closest to `target`. Falls back to `target` for an empty list. */

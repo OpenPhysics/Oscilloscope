@@ -129,8 +129,22 @@ describe("OscilloscopeModel", () => {
     for (const v of model.ch1Trace) {
       sum += v;
     }
-    // Mean should be ~0 after AC coupling despite the +3 V offset.
+    // Mean should be ~0 after AC high-pass despite the +3 V offset.
     expect(Math.abs(sum / model.ch1Trace.length)).toBeLessThan(0.05);
+    model.dispose();
+  });
+
+  it("×10 probe multiplies the effective volts/div without changing tip-voltage buffers", () => {
+    const model = new OscilloscopeModel();
+    model.ch1.voltsPerDivisionProperty.value = 0.5;
+    expect(model.ch1.effectiveVoltsPerDivision).toBeCloseTo(0.5);
+    model.ch1.probeProperty.value = 10;
+    expect(model.ch1.effectiveVoltsPerDivision).toBeCloseTo(5);
+    model.functionGenerator.amplitudeProperty.value = 1;
+    model.refresh();
+    const { max } = extremes(model.ch1Trace);
+    // Tip voltage is unchanged — only the display scale uses the probe factor.
+    expect(max).toBeGreaterThan(0.9);
     model.dispose();
   });
 
@@ -221,43 +235,74 @@ describe("OscilloscopeModel", () => {
     model.dispose();
   });
 
-  it("AC coupling holds the baseline steady as the timebase changes", () => {
-    // Regression: subtracting the mean of the *visible window* made the baseline
-    // of an asymmetric waveform jump whenever time/div changed the number of
-    // cycles on screen. A real scope's AC coupling is a fixed high-pass.
+  it("AC coupling keeps the mean near zero across timebases", () => {
+    // A real scope's AC coupling is a fixed high-pass; the mean of an offset
+    // sine should stay near zero regardless of how many cycles fit on screen.
     const model = new OscilloscopeModel();
-    model.functionGenerator.waveformProperty.value = "pulse";
-    model.functionGenerator.dutyCycleProperty.value = 0.2;
-    model.functionGenerator.offsetProperty.value = 0;
+    model.functionGenerator.waveformProperty.value = "sine";
+    model.functionGenerator.amplitudeProperty.value = 1;
+    model.functionGenerator.offsetProperty.value = 2;
     model.ch1.couplingProperty.value = "AC";
 
-    const centerVolts: number[] = [];
     for (const timePerDivision of [0.001, 0.0012, 0.0017, 0.002]) {
       model.timePerDivisionProperty.value = timePerDivision;
       model.refresh();
-      const trace = model.ch1Trace;
-      centerVolts.push(trace[Math.floor(trace.length / 2)] ?? 0);
+      let sum = 0;
+      for (const v of model.ch1Trace) {
+        sum += v;
+      }
+      expect(Math.abs(sum / model.ch1Trace.length)).toBeLessThan(0.08);
     }
-
-    const spread = Math.max(...centerVolts) - Math.min(...centerVolts);
-    expect(spread).toBeLessThan(1e-6);
     model.dispose();
   });
 
-  it("AC coupling removes the analytic DC of a duty-cycled waveform", () => {
+  it("AC coupling droops the flat top of a low-frequency square wave", () => {
+    const model = new OscilloscopeModel();
+    model.functionGenerator.waveformProperty.value = "square";
+    model.functionGenerator.frequencyProperty.value = 50;
+    model.functionGenerator.amplitudeProperty.value = 1;
+    model.functionGenerator.offsetProperty.value = 0;
+    model.functionGenerator.dutyCycleProperty.value = 0.5;
+    model.timePerDivisionProperty.value = 0.005; // 50 ms window ≈ 2.5 cycles
+    model.ch1.couplingProperty.value = "AC";
+    model.trigger.levelProperty.value = 0;
+    model.refresh();
+
+    const trace = model.ch1Trace;
+    // Find a run of high samples after the rising edge near center and confirm
+    // later samples in that plateau are lower (exponential droop).
+    const center = Math.floor(trace.length / 2);
+    let peak = center;
+    for (let i = center; i < center + 80 && i < trace.length; i++) {
+      if ((trace[i] ?? 0) > (trace[peak] ?? 0)) {
+        peak = i;
+      }
+    }
+    const later = Math.min(trace.length - 1, peak + 40);
+    expect(trace[peak] ?? 0).toBeGreaterThan(0.5);
+    expect(trace[later] ?? 0).toBeLessThan((trace[peak] ?? 0) - 0.05);
+    model.dispose();
+  });
+
+  it("AC coupling removes the DC of a duty-cycled waveform", () => {
     const model = new OscilloscopeModel();
     model.functionGenerator.waveformProperty.value = "pulse";
     model.functionGenerator.dutyCycleProperty.value = 0.25;
     model.functionGenerator.amplitudeProperty.value = 1;
     model.functionGenerator.offsetProperty.value = 0;
+    model.functionGenerator.frequencyProperty.value = 1000; // well above the AC cutoff
     model.ch1.couplingProperty.value = "AC";
     model.refresh();
 
-    // A 25% pulse of amplitude 1 has a DC component of 0.25 V, so AC coupling
-    // shifts the high level to +0.75 and the low level to -0.25.
+    let sum = 0;
+    for (const v of model.ch1Trace) {
+      sum += v;
+    }
+    expect(Math.abs(sum / model.ch1Trace.length)).toBeLessThan(0.15);
     const { min, max } = extremes(model.ch1Trace);
-    expect(max).toBeCloseTo(0.75, 5);
-    expect(min).toBeCloseTo(-0.25, 5);
+    // High sits above zero, low below — DC has been blocked.
+    expect(max).toBeGreaterThan(0.4);
+    expect(min).toBeLessThan(-0.1);
     model.dispose();
   });
 

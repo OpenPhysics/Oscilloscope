@@ -6,6 +6,7 @@
  *
  *   - on / off (whether the trace is displayed)
  *   - volts/div (vertical sensitivity, a 1-2-5 stepped rotary switch)
+ *   - probe attenuation (×1 / ×10) — scales the effective volts/div readout
  *   - vertical position (offset, in divisions)
  *   - AC / DC / GND coupling
  *   - invert
@@ -17,7 +18,12 @@
 
 import { BooleanProperty, NumberProperty, StringUnionProperty } from "scenerystack/axon";
 import OscilloscopeNamespace from "../../OscilloscopeNamespace.js";
-import { SCOPE_POSITION_RANGE, SCOPE_VOLTS_PER_DIV_RANGE } from "../../SimConstants.js";
+import {
+  type ProbeFactor,
+  SCOPE_POSITION_RANGE,
+  SCOPE_PROBE_FACTORS,
+  SCOPE_VOLTS_PER_DIV_RANGE,
+} from "../../SimConstants.js";
 import { CHANNEL_INPUTS, type ChannelInput } from "./ChannelInput.js";
 import { COUPLINGS, type Coupling } from "./Coupling.js";
 
@@ -39,8 +45,16 @@ export class Channel {
   /** Whether this channel's trace is drawn. */
   public readonly enabledProperty: BooleanProperty;
 
-  /** Vertical sensitivity, in volts per division. */
+  /** Vertical sensitivity, in volts per division (knob position, before probe). */
   public readonly voltsPerDivisionProperty: NumberProperty;
+
+  /**
+   * Probe factor (×1 or ×10). Multiplies the knob's volts/div for display and
+   * measurement scaling — the tip-voltage buffers themselves are unchanged.
+   */
+  public readonly probeProperty = new NumberProperty(1, {
+    validValues: [...SCOPE_PROBE_FACTORS],
+  });
 
   /** Vertical position (offset) of the trace, in divisions above center. */
   public readonly positionProperty = new NumberProperty(0, { range: SCOPE_POSITION_RANGE });
@@ -73,9 +87,23 @@ export class Channel {
     return this.voltsPerDivisionProperty.value;
   }
 
+  /** Probe attenuation factor currently selected on this channel. */
+  public get probeFactor(): ProbeFactor {
+    return this.probeProperty.value as ProbeFactor;
+  }
+
+  /**
+   * Volts represented by one division after probe compensation — what the
+   * on-screen scale and ΔV cursors use.
+   */
+  public get effectiveVoltsPerDivision(): number {
+    return this.voltsPerDivisionProperty.value * this.probeProperty.value;
+  }
+
   public reset(): void {
     this.enabledProperty.reset();
     this.voltsPerDivisionProperty.reset();
+    this.probeProperty.reset();
     this.positionProperty.reset();
     this.couplingProperty.reset();
     this.invertedProperty.reset();
@@ -85,6 +113,7 @@ export class Channel {
   public dispose(): void {
     this.enabledProperty.dispose();
     this.voltsPerDivisionProperty.dispose();
+    this.probeProperty.dispose();
     this.positionProperty.dispose();
     this.couplingProperty.dispose();
     this.invertedProperty.dispose();

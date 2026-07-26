@@ -7,7 +7,15 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { estimateFrequency, nearestStep } from "../src/oscilloscope-screen/view/measurementUtils.js";
+import {
+  estimateDutyCycle,
+  estimateFallTime,
+  estimateFrequency,
+  estimatePhaseDegrees,
+  estimateRiseTime,
+  meanOf,
+  nearestStep,
+} from "../src/oscilloscope-screen/view/measurementUtils.js";
 import { SCOPE_TIME_PER_DIV_STEPS, SCOPE_VOLTS_PER_DIV_STEPS } from "../src/SimConstants.js";
 
 /** `cycles` full periods spread across `samples` points spanning the whole window. */
@@ -104,5 +112,54 @@ describe("nearestStep", () => {
 
   it("falls back to the target for an empty step list", () => {
     expect(nearestStep([], 3.14)).toBe(3.14);
+  });
+});
+
+describe("estimateDutyCycle", () => {
+  it("recovers a known pulse duty cycle", () => {
+    expect(estimateDutyCycle(pulseBuffer(4, 1000, 0.25))).toBeCloseTo(0.25, 1);
+    expect(estimateDutyCycle(pulseBuffer(4, 1000, 0.75))).toBeCloseTo(0.75, 1);
+  });
+
+  it("returns 0 for a flat line", () => {
+    expect(estimateDutyCycle(new Float32Array(100))).toBe(0);
+  });
+});
+
+describe("meanOf", () => {
+  it("averages the buffer", () => {
+    expect(meanOf(new Float32Array([1, 2, 3]))).toBeCloseTo(2);
+  });
+});
+
+describe("estimateRiseTime / estimateFallTime", () => {
+  it("measures a near-ideal step edge as a short rise", () => {
+    // Abrupt pulse: rise spans one sample at 1 ms window / 999 intervals.
+    const buf = pulseBuffer(2, 1000, 0.5);
+    const rise = estimateRiseTime(buf, 0.001);
+    expect(rise).toBeGreaterThan(0);
+    expect(rise).toBeLessThan(0.00005);
+  });
+
+  it("measures a matching fall on the same pulse", () => {
+    const buf = pulseBuffer(2, 1000, 0.5);
+    const fall = estimateFallTime(buf, 0.001);
+    expect(fall).toBeGreaterThan(0);
+    expect(fall).toBeLessThan(0.00005);
+  });
+});
+
+describe("estimatePhaseDegrees", () => {
+  it("recovers a 90° phase shift between two sines", () => {
+    const samples = 1000;
+    const cycles = 5;
+    const a = sineBuffer(cycles, samples);
+    const b = new Float32Array(samples);
+    for (let i = 0; i < samples; i++) {
+      // b lags a by 90° (quarter cycle later).
+      b[i] = Math.sin((2 * Math.PI * cycles * i) / (samples - 1) - Math.PI / 2);
+    }
+    const phase = estimatePhaseDegrees(a, b, 1);
+    expect(Math.abs(phase - 90)).toBeLessThan(3);
   });
 });

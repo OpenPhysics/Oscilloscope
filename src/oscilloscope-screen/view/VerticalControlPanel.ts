@@ -15,7 +15,7 @@ import { RotarySwitch } from "../../common/controls/RotarySwitch.js";
 import { SimPanel } from "../../common/SimPanel.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
-import { SCOPE_POSITION_RANGE, SCOPE_VOLTS_PER_DIV_STEPS } from "../../SimConstants.js";
+import { SCOPE_POSITION_RANGE, SCOPE_PROBE_FACTORS, SCOPE_VOLTS_PER_DIV_STEPS } from "../../SimConstants.js";
 import type { Channel } from "../model/Channel.js";
 import { COUPLINGS } from "../model/Coupling.js";
 import { MATH_MODES, type OscilloscopeModel } from "../model/OscilloscopeModel.js";
@@ -27,6 +27,7 @@ const CHANNEL_FONT = new PhetFont({ size: 13, weight: "bold" });
 
 type ChannelA11y = {
   voltsPerDivision: TReadOnlyProperty<string>;
+  probe: TReadOnlyProperty<string>;
   position: TReadOnlyProperty<string>;
   coupling: TReadOnlyProperty<string>;
   invert: TReadOnlyProperty<string>;
@@ -56,6 +57,7 @@ export class VerticalControlPanel extends SimPanel {
       trig.ch1StringProperty,
       {
         voltsPerDivision: a11y.ch1VoltsPerDivisionStringProperty,
+        probe: a11y.ch1ProbeStringProperty,
         position: a11y.ch1PositionStringProperty,
         coupling: a11y.ch1CouplingStringProperty,
         invert: a11y.ch1InvertStringProperty,
@@ -68,6 +70,7 @@ export class VerticalControlPanel extends SimPanel {
       trig.ch2StringProperty,
       {
         voltsPerDivision: a11y.ch2VoltsPerDivisionStringProperty,
+        probe: a11y.ch2ProbeStringProperty,
         position: a11y.ch2PositionStringProperty,
         coupling: a11y.ch2CouplingStringProperty,
         invert: a11y.ch2InvertStringProperty,
@@ -119,12 +122,15 @@ export class VerticalControlPanel extends SimPanel {
       minWidth: 44,
     });
 
+    // Math / FFT sit as a button column on the left edge of the section, like the
+    // real scope's M / FFT / Ref stack beside the vertical knobs.
+    const mathColumn = new VBox({ align: "center", spacing: 8, children: [mathButton, fftButton] });
+
     const body = new VBox({
       align: "center",
       spacing: 8,
       children: [
-        new HBox({ spacing: 16, align: "top", children: [column1, column2] }),
-        new HBox({ spacing: 8, children: [mathButton, fftButton] }),
+        new HBox({ spacing: 16, align: "top", children: [mathColumn, column1, column2] }),
         new HBox({ spacing: 28, align: "top", children: [options.ch1Bnc, options.ch2Bnc] }),
       ],
     });
@@ -175,8 +181,17 @@ class VerticalControlPanelColumn extends VBox {
 
     const voltsSwitch = new RotarySwitch(
       channel.voltsPerDivisionProperty,
-      numberItems(SCOPE_VOLTS_PER_DIV_STEPS, formatVoltsPerDiv),
+      SCOPE_VOLTS_PER_DIV_STEPS.map((value) => ({
+        value,
+        stringProperty: new DerivedProperty([channel.probeProperty], (probe) => formatVoltsPerDiv(value * probe)),
+      })),
       { radius: 20, captionStringProperty: v.voltsPerDivisionStringProperty, accessibleName: a11y.voltsPerDivision },
+    );
+
+    const probeSwitch = new RotarySwitch(
+      channel.probeProperty,
+      numberItems(SCOPE_PROBE_FACTORS, (factor) => `×${factor}`),
+      { radius: 14, captionStringProperty: v.probeStringProperty, accessibleName: a11y.probe },
     );
 
     const couplingSwitch = new RotarySwitch(
@@ -208,11 +223,12 @@ class VerticalControlPanelColumn extends VBox {
         positionKnob,
         menuButton,
         voltsSwitch,
+        probeSwitch,
         couplingSwitch,
         invertButton,
       ],
     });
 
-    this.order = [positionKnob, menuButton, voltsSwitch, couplingSwitch, invertButton];
+    this.order = [positionKnob, menuButton, voltsSwitch, probeSwitch, couplingSwitch, invertButton];
   }
 }

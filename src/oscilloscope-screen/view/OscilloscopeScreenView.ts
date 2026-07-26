@@ -13,13 +13,12 @@
 import type { TProperty, TReadOnlyProperty } from "scenerystack/axon";
 import { DerivedProperty, NumberProperty } from "scenerystack/axon";
 import { Bounds2 } from "scenerystack/dot";
-import { Node, Rectangle, Text, VBox } from "scenerystack/scenery";
-import { PhetFont, ResetAllButton } from "scenerystack/scenery-phet";
+import { Node, Rectangle, VBox } from "scenerystack/scenery";
+import { ResetAllButton } from "scenerystack/scenery-phet";
 import type { ScreenViewOptions } from "scenerystack/sim";
-import { Dialog, ScreenView } from "scenerystack/sim";
+import { ScreenView } from "scenerystack/sim";
 import { downloadTextFile, triggerBlobDownload } from "../../common/downloadFile.js";
 import { FLAT_RESET_ALL_BUTTON_OPTIONS } from "../../common/SimButtonOptions.js";
-import { StringManager } from "../../i18n/StringManager.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
 import {
   HORIZONTAL_DIVISIONS,
@@ -30,12 +29,21 @@ import {
   SCREEN_VIEW_MARGIN,
 } from "../../SimConstants.js";
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
+import { spectrumMaxFrequency } from "../model/Spectrum.js";
 import { CursorReadoutNode } from "./CursorReadoutNode.js";
 import { HorizontalControlPanel } from "./HorizontalControlPanel.js";
+import { LabActivitiesDialog } from "./LabActivitiesDialog.js";
 import { MeasurementReadoutNode } from "./MeasurementReadoutNode.js";
-import { estimateFrequency, nearestStep } from "./measurementUtils.js";
+import {
+  estimateDutyCycle,
+  estimateFallTime,
+  estimateFrequency,
+  estimatePhaseDegrees,
+  estimateRiseTime,
+  meanOf,
+  nearestStep,
+} from "./measurementUtils.js";
 import { OscilloscopeDisplayNode } from "./OscilloscopeDisplayNode.js";
-import { OscilloscopeKeyboardHelpContent } from "./OscilloscopeKeyboardHelpContent.js";
 import { OscilloscopeScreenSummaryContent } from "./OscilloscopeScreenSummaryContent.js";
 import { PatchCableLayer } from "./PatchCableLayer.js";
 import { SignalGeneratorPanel } from "./SignalGeneratorPanel.js";
@@ -62,10 +70,18 @@ export class OscilloscopeScreenView extends ScreenView {
   private readonly measuredVrms = new NumberProperty(0);
   private readonly measuredVmax = new NumberProperty(0);
   private readonly measuredVmin = new NumberProperty(0);
+  private readonly measuredDutyCycle = new NumberProperty(0);
+  private readonly measuredRiseTime = new NumberProperty(0);
+  private readonly measuredFallTime = new NumberProperty(0);
+  private readonly measuredMean = new NumberProperty(0);
+  private readonly measuredPhase = new NumberProperty(0);
 
   private readonly measuredDeltaTime = new NumberProperty(0);
   private readonly measuredCursorFrequency = new NumberProperty(0);
   private readonly measuredDeltaVoltage = new NumberProperty(0);
+  private readonly measuredFrequency1 = new NumberProperty(0);
+  private readonly measuredFrequency2 = new NumberProperty(0);
+  private readonly measuredDeltaFrequency = new NumberProperty(0);
 
   private redrawDirty = true;
   private readonly markRedrawDirty = (): void => {
@@ -99,6 +115,15 @@ export class OscilloscopeScreenView extends ScreenView {
         vrmsProperty: this.measuredVrms,
         vmaxProperty: this.measuredVmax,
         vminProperty: this.measuredVmin,
+        dutyCycleProperty: this.measuredDutyCycle,
+        riseTimeProperty: this.measuredRiseTime,
+        fallTimeProperty: this.measuredFallTime,
+        meanProperty: this.measuredMean,
+        phaseProperty: this.measuredPhase,
+        showPhaseProperty: new DerivedProperty(
+          [model.ch1.enabledProperty, model.ch2.enabledProperty],
+          (a, b) => a && b,
+        ),
       },
       showMeasurementsProperty,
     );
@@ -111,8 +136,15 @@ export class OscilloscopeScreenView extends ScreenView {
         deltaTimeProperty: this.measuredDeltaTime,
         cursorFrequencyProperty: this.measuredCursorFrequency,
         deltaVoltageProperty: this.measuredDeltaVoltage,
+        frequency1Property: this.measuredFrequency1,
+        frequency2Property: this.measuredFrequency2,
+        deltaFrequencyProperty: this.measuredDeltaFrequency,
+        displayModeProperty: model.displayModeProperty,
       },
-      new DerivedProperty([model.cursorsEnabledProperty, model.displayModeProperty], (on, mode) => on && mode === "yt"),
+      new DerivedProperty(
+        [model.cursorsEnabledProperty, model.displayModeProperty],
+        (on, mode) => on && (mode === "yt" || mode === "fft"),
+      ),
     );
     cursorReadout.right = displayNode.right - 8;
     cursorReadout.top = displayNode.top + 8;
@@ -126,7 +158,7 @@ export class OscilloscopeScreenView extends ScreenView {
       showMeasurementsProperty,
       onSingle: () => this.captureSingle(),
       onAutoset: () => this.autoset(),
-      onHelp: () => this.showHelp(),
+      onHelp: () => this.showLabs(),
       onExportCsv: () => this.exportCsv(),
       onExportImage: () => this.exportImage(),
     });
@@ -163,19 +195,21 @@ export class OscilloscopeScreenView extends ScreenView {
     softkeys.centerY = displayNode.centerY;
     this.addChild(softkeys);
 
-    // TBS geography to the right of the CRT:
-    // soft/acquire on top, then horizontal + trigger, then vertical (with BNCs).
+    // TBS geography to the right of the CRT: soft/acquire on top, then a
+    // Vertical | Horizontal | Trigger row beneath it.
     const controlsLeft = softkeys.right + 12;
     softAcquirePanel.left = controlsLeft;
     softAcquirePanel.top = SCREEN_VIEW_MARGIN;
 
-    horizontalPanel.left = softAcquirePanel.left;
+    // Vertical | Horizontal | Trigger in one row under the soft/acquire cluster,
+    // like the real scope: Vertical on the left, Horizontal and Trigger to its right.
+    verticalPanel.left = controlsLeft;
+    verticalPanel.top = softAcquirePanel.bottom + 10;
+
+    horizontalPanel.left = verticalPanel.right + 12;
     horizontalPanel.top = softAcquirePanel.bottom + 10;
     triggerPanel.left = horizontalPanel.right + 12;
     triggerPanel.top = softAcquirePanel.bottom + 10;
-
-    verticalPanel.left = controlsLeft;
-    verticalPanel.top = Math.max(horizontalPanel.bottom, triggerPanel.bottom) + 10;
 
     // Generator under the CRT on the left; wires reach rightward to the BNCs.
     generatorPanel.left = SCREEN_VIEW_MARGIN;
@@ -230,12 +264,14 @@ export class OscilloscopeScreenView extends ScreenView {
     this.renderInputs.push(
       model.ch1.enabledProperty,
       model.ch1.voltsPerDivisionProperty,
+      model.ch1.probeProperty,
       model.ch1.positionProperty,
       model.ch1.couplingProperty,
       model.ch1.invertedProperty,
       model.ch1.inputProperty,
       model.ch2.enabledProperty,
       model.ch2.voltsPerDivisionProperty,
+      model.ch2.probeProperty,
       model.ch2.positionProperty,
       model.ch2.couplingProperty,
       model.ch2.invertedProperty,
@@ -263,13 +299,12 @@ export class OscilloscopeScreenView extends ScreenView {
     this.redrawDirty = false;
   }
 
-  private showHelp(): void {
-    const titleNode = new Text(StringManager.getInstance().getAcquisition().helpStringProperty, {
-      font: new PhetFont({ size: 18, weight: "bold" }),
-    });
-    const dialog = new Dialog(new OscilloscopeKeyboardHelpContent(), {
-      title: titleNode,
-      closeButtonListener: () => dialog.hide(),
+  private showLabs(): void {
+    const dialog = new LabActivitiesDialog(this.model, () => {
+      this.model.refresh();
+      this.redraw();
+      this.redrawDirty = false;
+      this.patchLayer.redrawWires();
     });
     dialog.show();
   }
@@ -294,8 +329,10 @@ export class OscilloscopeScreenView extends ScreenView {
     let min = Number.POSITIVE_INFINITY;
     let max = Number.NEGATIVE_INFINITY;
     let sumSquares = 0;
-    for (const raw of buffer) {
-      const v = sign * raw;
+    const signed = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const v = sign * (buffer[i] ?? 0);
+      signed[i] = v;
       if (v < min) {
         min = v;
       }
@@ -308,23 +345,63 @@ export class OscilloscopeScreenView extends ScreenView {
     this.measuredVmin.value = Number.isFinite(min) ? min : 0;
     this.measuredVpp.value = max > min ? max - min : 0;
     this.measuredVrms.value = n > 0 ? Math.sqrt(sumSquares / n) : 0;
+    this.measuredMean.value = meanOf(signed);
+    this.measuredDutyCycle.value = estimateDutyCycle(signed);
+    this.measuredRiseTime.value = estimateRiseTime(signed, model.timeWindow);
+    this.measuredFallTime.value = estimateFallTime(signed, model.timeWindow);
 
     const primaryInput = model.primaryChannel.inputProperty.value;
     const audioPrimary = primaryInput === "microphone";
     const hz = audioPrimary
-      ? estimateFrequency(buffer, model.timeWindow)
+      ? estimateFrequency(signed, model.timeWindow)
       : primaryInput === "none"
         ? 0
         : model.functionGenerator.frequencyProperty.value;
     this.measuredFrequency.value = hz;
     this.measuredPeriod.value = hz > 0 ? 1 / hz : 0;
 
+    this.updatePhaseMeasurement();
+
     const deltaDivisionsTime = Math.abs(model.cursorTime2Property.value - model.cursorTime1Property.value);
     const deltaTime = deltaDivisionsTime * model.effectiveTimePerDivision;
     this.measuredDeltaTime.value = deltaTime;
     this.measuredCursorFrequency.value = deltaTime > 0 ? 1 / deltaTime : 0;
     const deltaDivisionsVolt = Math.abs(model.cursorVolt1Property.value - model.cursorVolt2Property.value);
-    this.measuredDeltaVoltage.value = deltaDivisionsVolt * model.primaryChannel.voltsPerDivision;
+    this.measuredDeltaVoltage.value = deltaDivisionsVolt * model.primaryChannel.effectiveVoltsPerDivision;
+
+    const fMax = spectrumMaxFrequency(model.sampleCount, model.timeWindow);
+    const f1 = (model.cursorTime1Property.value / HORIZONTAL_DIVISIONS) * fMax;
+    const f2 = (model.cursorTime2Property.value / HORIZONTAL_DIVISIONS) * fMax;
+    this.measuredFrequency1.value = f1;
+    this.measuredFrequency2.value = f2;
+    this.measuredDeltaFrequency.value = Math.abs(f2 - f1);
+  }
+
+  private updatePhaseMeasurement(): void {
+    const model = this.model;
+    if (!(model.ch1.enabledProperty.value && model.ch2.enabledProperty.value)) {
+      this.measuredPhase.value = 0;
+      return;
+    }
+    // Prefer the generator phase when both channels are FG A/B — exact and noise-free.
+    const in1 = model.ch1.inputProperty.value;
+    const in2 = model.ch2.inputProperty.value;
+    if (
+      (in1 === "functionGeneratorA" || in1 === "functionGeneratorB") &&
+      (in2 === "functionGeneratorA" || in2 === "functionGeneratorB")
+    ) {
+      const phaseA = in1 === "functionGeneratorB" ? model.functionGenerator.phaseProperty.value : 0;
+      const phaseB = in2 === "functionGeneratorB" ? model.functionGenerator.phaseProperty.value : 0;
+      this.measuredPhase.value = (((phaseB - phaseA) % 360) + 360) % 360;
+      return;
+    }
+    // Both channels are enabled here (checked above), so CH2's clean buffer was
+    // filled this frame; estimate phase from the two captured traces.
+    const s1 = model.ch1.invertedProperty.value ? -1 : 1;
+    const s2 = model.ch2.invertedProperty.value ? -1 : 1;
+    const a = Float32Array.from(model.ch1CleanTrace, (v) => s1 * v);
+    const b = Float32Array.from(model.ch2CleanTrace, (v) => s2 * v);
+    this.measuredPhase.value = estimatePhaseDegrees(a, b, model.timeWindow);
   }
 
   private autoset(): void {
@@ -343,6 +420,7 @@ export class OscilloscopeScreenView extends ScreenView {
     model.ch1.enabledProperty.value = true;
     model.ch1.couplingProperty.value = "DC";
     model.ch1.invertedProperty.value = false;
+    model.ch1.probeProperty.value = 1;
     model.ch1.positionProperty.value = 0;
     model.refresh();
     this.updateMeasurements();

@@ -2,13 +2,12 @@
  * CursorReadoutNode.ts
  *
  * A translucent readout for the draggable measurement cursors, shown at the
- * top-right of the display when cursors are enabled. It reports the time and
- * voltage differences between the cursor pairs and the derived cursor frequency:
- * Δt, 1/Δt, and ΔV. The view feeds it live numeric Properties.
+ * top-right of the display when cursors are enabled. In Y-T mode it reports Δt,
+ * 1/Δt, and ΔV; in FFT mode it reports the two frequency-cursor readouts and Δf.
  */
 
 import { DerivedProperty, type TReadOnlyProperty } from "scenerystack/axon";
-import { GridBox, Rectangle, Text } from "scenerystack/scenery";
+import { GridBox, Node, Rectangle, Text } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
 import { StringManager } from "../../i18n/StringManager.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
@@ -21,6 +20,7 @@ import {
   READOUT_X_PADDING,
   READOUT_Y_PADDING,
 } from "../../SimConstants.js";
+import type { DisplayMode } from "../model/OscilloscopeModel.js";
 import { formatFrequency, formatPeriod, formatVoltage } from "./formatUnits.js";
 
 const READOUT_FONT = new PhetFont(READOUT_FONT_SIZE);
@@ -29,6 +29,10 @@ export type CursorMeasurements = {
   readonly deltaTimeProperty: TReadOnlyProperty<number>;
   readonly cursorFrequencyProperty: TReadOnlyProperty<number>;
   readonly deltaVoltageProperty: TReadOnlyProperty<number>;
+  readonly frequency1Property: TReadOnlyProperty<number>;
+  readonly frequency2Property: TReadOnlyProperty<number>;
+  readonly deltaFrequencyProperty: TReadOnlyProperty<number>;
+  readonly displayModeProperty: TReadOnlyProperty<DisplayMode>;
 };
 
 export class CursorReadoutNode extends Rectangle {
@@ -45,8 +49,17 @@ export class CursorReadoutNode extends Rectangle {
       hz > 0 ? formatFrequency(hz) : dash,
     );
     const dvString = new DerivedProperty([measurements.deltaVoltageProperty], formatVoltage);
+    const f1String = new DerivedProperty([measurements.frequency1Property, m.noneStringProperty], (hz, dash) =>
+      hz > 0 ? formatFrequency(hz) : dash,
+    );
+    const f2String = new DerivedProperty([measurements.frequency2Property, m.noneStringProperty], (hz, dash) =>
+      hz > 0 ? formatFrequency(hz) : dash,
+    );
+    const dfString = new DerivedProperty([measurements.deltaFrequencyProperty, m.noneStringProperty], (hz, dash) =>
+      hz > 0 ? formatFrequency(hz) : dash,
+    );
 
-    const grid = new GridBox({
+    const ytGrid = new GridBox({
       xSpacing: READOUT_COLUMN_SPACING,
       ySpacing: READOUT_ROW_SPACING,
       xAlign: "left",
@@ -57,13 +70,37 @@ export class CursorReadoutNode extends Rectangle {
       ],
     });
 
-    super(0, 0, grid.width + READOUT_X_PADDING, grid.height + READOUT_Y_PADDING, {
-      fill: OscilloscopeColors.readoutBackgroundColorProperty,
-      cornerRadius: READOUT_CORNER_RADIUS,
-      visibleProperty,
+    const fftGrid = new GridBox({
+      xSpacing: READOUT_COLUMN_SPACING,
+      ySpacing: READOUT_ROW_SPACING,
+      xAlign: "left",
+      rows: [
+        [text(m.frequency1StringProperty), text(f1String)],
+        [text(m.frequency2StringProperty), text(f2String)],
+        [text(m.deltaFrequencyStringProperty), text(dfString)],
+      ],
     });
-    grid.left = READOUT_INSET;
-    grid.centerY = this.rectHeight / 2;
-    this.addChild(grid);
+
+    const ytVisible = new DerivedProperty([measurements.displayModeProperty], (mode) => mode === "yt");
+    const fftVisible = new DerivedProperty([measurements.displayModeProperty], (mode) => mode === "fft");
+    ytGrid.visibleProperty = ytVisible;
+    fftGrid.visibleProperty = fftVisible;
+
+    const stack = new Node({ children: [ytGrid, fftGrid] });
+
+    super(
+      0,
+      0,
+      Math.max(ytGrid.width, fftGrid.width) + READOUT_X_PADDING,
+      Math.max(ytGrid.height, fftGrid.height) + READOUT_Y_PADDING,
+      {
+        fill: OscilloscopeColors.readoutBackgroundColorProperty,
+        cornerRadius: READOUT_CORNER_RADIUS,
+        visibleProperty,
+      },
+    );
+    stack.left = READOUT_INSET;
+    stack.centerY = this.rectHeight / 2;
+    this.addChild(stack);
   }
 }

@@ -4,6 +4,11 @@
  * Custom preferences UI shown in Preferences → Simulation. Controls are bound
  * to OscilloscopePreferencesModel Properties (whose initial values come from
  * oscilloscopeQueryParameters).
+ *
+ * The Preferences dialog chrome is always light (joist), independent of the
+ * sim's default/projector color profile. All fills here therefore use the
+ * light-surface palette (same values as projector), never theme-aware panel
+ * text/background colors that flip to near-white in default mode.
  */
 
 import { DerivedProperty } from "scenerystack/axon";
@@ -11,6 +16,7 @@ import { Text, VBox } from "scenerystack/scenery";
 import { NumberControl, PhetFont } from "scenerystack/scenery-phet";
 import { Checkbox } from "scenerystack/sun";
 import type { Tandem } from "scenerystack/tandem";
+import { LIGHT_SURFACE_TEXT_FILL } from "../common/SimButtonOptions.js";
 import { StringManager } from "../i18n/StringManager.js";
 import OscilloscopeColors from "../OscilloscopeColors.js";
 import OscilloscopeNamespace from "../OscilloscopeNamespace.js";
@@ -23,12 +29,12 @@ export class OscilloscopePreferencesNode extends VBox {
 
     const header = new Text(prefStrings.titleStringProperty, {
       font: new PhetFont({ size: 18, weight: "bold" }),
-      fill: OscilloscopeColors.textColorProperty,
+      fill: LIGHT_SURFACE_TEXT_FILL,
     });
 
     const checkboxOptions = {
-      checkboxColor: OscilloscopeColors.textColorProperty,
-      checkboxColorBackground: OscilloscopeColors.panelBackgroundColorProperty,
+      checkboxColor: LIGHT_SURFACE_TEXT_FILL,
+      checkboxColorBackground: OscilloscopeColors.controlSurfaceColorProperty,
       spacing: 8,
     };
 
@@ -36,7 +42,7 @@ export class OscilloscopePreferencesNode extends VBox {
       preferencesModel.showMeasurementsProperty,
       new Text(prefStrings.showMeasurementsStringProperty, {
         font: new PhetFont(14),
-        fill: OscilloscopeColors.textColorProperty,
+        fill: LIGHT_SURFACE_TEXT_FILL,
       }),
       {
         ...checkboxOptions,
@@ -48,7 +54,7 @@ export class OscilloscopePreferencesNode extends VBox {
       preferencesModel.noiseEnabledProperty,
       new Text(prefStrings.noiseStringProperty, {
         font: new PhetFont(14),
-        fill: OscilloscopeColors.textColorProperty,
+        fill: LIGHT_SURFACE_TEXT_FILL,
       }),
       {
         ...checkboxOptions,
@@ -64,13 +70,14 @@ export class OscilloscopePreferencesNode extends VBox {
       {
         enabledProperty: new DerivedProperty([preferencesModel.noiseEnabledProperty], (on) => on),
         delta: 0.05,
-        titleNodeOptions: { font: new PhetFont(13), fill: OscilloscopeColors.textColorProperty },
+        titleNodeOptions: { font: new PhetFont(13), fill: LIGHT_SURFACE_TEXT_FILL },
         numberDisplayOptions: {
           decimalPlaces: 2,
-          textOptions: { font: new PhetFont(13), fill: OscilloscopeColors.controlSurfaceTextColorProperty },
+          textOptions: { font: new PhetFont(13), fill: LIGHT_SURFACE_TEXT_FILL },
           backgroundFill: OscilloscopeColors.controlSurfaceColorProperty,
         },
-        sliderOptions: { thumbFill: OscilloscopeColors.accentColorProperty },
+        // Dark thumb so it stays readable on the always-white dialog in either profile.
+        sliderOptions: { thumbFill: LIGHT_SURFACE_TEXT_FILL },
         ...(tandem && { tandem: tandem.createTandem("noiseAmplitudeControl") }),
       },
     );

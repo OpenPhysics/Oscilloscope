@@ -98,6 +98,20 @@ export function computeMagnitudeSpectrum(samples: Float32Array, scratch?: Spectr
   return mag;
 }
 
+/**
+ * Frequency (Hz) of the rightmost FFT bin drawn across the display width, given
+ * a time-domain capture of `sampleCount` points spanning `windowSeconds`.
+ */
+export function spectrumMaxFrequency(sampleCount: number, windowSeconds: number): number {
+  const size = largestPowerOfTwoAtMost(sampleCount);
+  if (size < 2 || windowSeconds <= 0 || sampleCount < 2) {
+    return 0;
+  }
+  const sampleRate = (sampleCount - 1) / windowSeconds;
+  const bins = size / 2;
+  return ((bins - 1) * sampleRate) / size;
+}
+
 /** In-place iterative Cooley-Tukey radix-2 FFT. `re`/`im` length must be a power of two. */
 function fftInPlace(re: Float64Array, im: Float64Array): void {
   const n = re.length;

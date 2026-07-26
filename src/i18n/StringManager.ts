@@ -124,6 +124,11 @@ export class StringManager {
     return stringProperties.measurements;
   }
 
+  /** Guided lab-activity dialog strings. */
+  public getLabs() {
+    return stringProperties.labs;
+  }
+
   /**
    * Accessibility (Interactive Description) StringProperties.
    *

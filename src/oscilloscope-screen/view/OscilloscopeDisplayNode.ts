@@ -255,9 +255,9 @@ export class OscilloscopeDisplayNode extends Node {
     this.mutate(providedOptions);
   }
 
-  /** Pixels representing one volt on the given channel. */
+  /** Pixels representing one volt on the given channel (after probe scaling). */
   private pixelsPerVolt(channel: Channel): number {
-    return DIVISION_SIZE / channel.voltsPerDivision;
+    return DIVISION_SIZE / channel.effectiveVoltsPerDivision;
   }
 
   /** Screen y (display-local) of the given channel's zero-volt baseline. */
@@ -318,7 +318,16 @@ export class OscilloscopeDisplayNode extends Node {
       this.xyPath.shape = null;
       this.fftPath.shape = this.buildFFTShape();
       this.triggerMarker.visible = false;
-      this.cursorLayer.visible = false;
+      const cursorsOn = model.cursorsEnabledProperty.value;
+      this.cursorLayer.visible = cursorsOn;
+      // Frequency cursors reuse the vertical (time) cursor lines; hide the voltage pair.
+      const [time1, time2, volt1, volt2] = this.cursorsInOrder;
+      if (time1 && time2 && volt1 && volt2) {
+        time1.visible = cursorsOn;
+        time2.visible = cursorsOn;
+        volt1.visible = false;
+        volt2.visible = false;
+      }
       return;
     }
 
@@ -326,6 +335,9 @@ export class OscilloscopeDisplayNode extends Node {
     this.fftPath.shape = null;
     this.triggerMarker.visible = true;
     this.cursorLayer.visible = model.cursorsEnabledProperty.value;
+    for (const cursor of this.cursorsInOrder) {
+      cursor.visible = true;
+    }
 
     // Persistence: keep the last CH1 sweep as a faded ghost.
     if (model.persistenceProperty.value) {

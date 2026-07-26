@@ -2,9 +2,9 @@
  * MeasurementReadoutNode.ts
  *
  * A translucent automatic-measurements readout overlaid on the top-left of the
- * display, echoing a real scope's MEASURE panel: frequency, period, and the
- * peak-to-peak, RMS, max and min voltages of the primary channel. The view feeds
- * it live numeric Properties (measured each frame); this node formats them.
+ * display, echoing a real scope's MEASURE panel: frequency, period, peak and RMS
+ * voltages, duty cycle, rise/fall times, mean, and (when CH2 is on) CH1–CH2
+ * phase. The view feeds it live numeric Properties; this node formats them.
  *
  * Visibility is bound to the Preferences → Simulation "Show on-screen
  * measurements" toggle.
@@ -24,7 +24,7 @@ import {
   READOUT_X_PADDING,
   READOUT_Y_PADDING,
 } from "../../SimConstants.js";
-import { formatFrequency, formatPeriod, formatVoltage } from "./formatUnits.js";
+import { formatDegrees, formatFrequency, formatPercent, formatPeriod, formatVoltage } from "./formatUnits.js";
 
 const READOUT_FONT = new PhetFont(READOUT_FONT_SIZE);
 
@@ -37,6 +37,13 @@ export type MeasurementProperties = {
   readonly vrmsProperty: TReadOnlyProperty<number>;
   readonly vmaxProperty: TReadOnlyProperty<number>;
   readonly vminProperty: TReadOnlyProperty<number>;
+  readonly dutyCycleProperty: TReadOnlyProperty<number>;
+  readonly riseTimeProperty: TReadOnlyProperty<number>;
+  readonly fallTimeProperty: TReadOnlyProperty<number>;
+  readonly meanProperty: TReadOnlyProperty<number>;
+  /** Phase of CH2 relative to CH1 in degrees; negative hides the row. */
+  readonly phaseProperty: TReadOnlyProperty<number>;
+  readonly showPhaseProperty: TReadOnlyProperty<boolean>;
 };
 
 export class MeasurementReadoutNode extends Rectangle {
@@ -60,6 +67,26 @@ export class MeasurementReadoutNode extends Rectangle {
     const vrmsString = new DerivedProperty([measurements.vrmsProperty], formatVoltage);
     const vmaxString = new DerivedProperty([measurements.vmaxProperty], formatVoltage);
     const vminString = new DerivedProperty([measurements.vminProperty], formatVoltage);
+    const dutyString = new DerivedProperty([measurements.dutyCycleProperty, none], (d, dash) =>
+      d > 0 ? formatPercent(d) : dash,
+    );
+    const riseString = new DerivedProperty([measurements.riseTimeProperty, none], (s, dash) =>
+      s > 0 ? formatPeriod(s) : dash,
+    );
+    const fallString = new DerivedProperty([measurements.fallTimeProperty, none], (s, dash) =>
+      s > 0 ? formatPeriod(s) : dash,
+    );
+    const meanString = new DerivedProperty([measurements.meanProperty], formatVoltage);
+    const phaseString = new DerivedProperty([measurements.phaseProperty, none], (deg, dash) =>
+      deg >= 0 ? formatDegrees(deg) : dash,
+    );
+
+    const phaseLabel = labelText(m.phaseStringProperty);
+    const phaseValue = valueText(phaseString);
+    measurements.showPhaseProperty.link((show) => {
+      phaseLabel.visible = show;
+      phaseValue.visible = show;
+    });
 
     const grid = new GridBox({
       xSpacing: READOUT_COLUMN_SPACING,
@@ -72,6 +99,11 @@ export class MeasurementReadoutNode extends Rectangle {
         [labelText(m.vrmsStringProperty), valueText(vrmsString)],
         [labelText(m.vmaxStringProperty), valueText(vmaxString)],
         [labelText(m.vminStringProperty), valueText(vminString)],
+        [labelText(m.dutyCycleStringProperty), valueText(dutyString)],
+        [labelText(m.riseTimeStringProperty), valueText(riseString)],
+        [labelText(m.fallTimeStringProperty), valueText(fallString)],
+        [labelText(m.meanStringProperty), valueText(meanString)],
+        [phaseLabel, phaseValue],
       ],
     });
 

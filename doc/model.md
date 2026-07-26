@@ -94,25 +94,32 @@ exists — the level is outside the signal's range — the behavior depends on t
 sweeps anyway from `t = 0` (a free-running trace), **normal** holds the previously captured sweep,
 and **single** holds it too, then stops the sweep clock once one triggered capture lands.
 
-**Coupling.** Applied to the sampled buffer, where `V_DC = A·(mean of s) + V₀` is the signal's exact
-DC component from the table above:
+**Coupling.** Applied to the sampled buffer:
 
 ```
 DC :  v            (unchanged)
-AC :  v − V_DC
+AC :  (v − V_DC) then a first-order high-pass with τ ≈ 10 ms
 GND:  0
 ```
 
-Using the *analytic* DC rather than the average of what happens to be on screen matters: a window
-average depends on how many cycles the current timebase shows, which would make an asymmetric
-waveform's baseline shift every time the time/div knob moved.
+`V_DC` is the signal's analytic mean for the generator (so the baseline does not
+jump when time/div changes) or the window mean for the microphone. The high-pass
+then droops the flat tops of low-frequency square waves the way a bench scope's
+AC coupling does.
 
-**Measurements.** Vmax, Vmin, and Vpp = Vmax − Vmin are read from the captured trace; Vrms is the
-root-mean-square over the window. These are taken from a *noiseless* copy of the signal — Vmax and
-Vmin are extreme values, and added noise pushes them apart but never together, which would inflate
-Vpp by roughly the noise amplitude. For the generator the displayed frequency is exact; for the
-microphone it is estimated from the spacing of the signal's mean-crossings, each located to
-sub-sample precision.
+**Probe.** Each channel has a ×1 / ×10 probe switch. Tip voltage in the buffers is
+unchanged; the probe factor multiplies the effective volts/div used for drawing
+and for ΔV / Scale readouts. Switching to ×10 makes the same tip signal occupy
+one-tenth as many divisions — matching a DSO told a ×10 probe is attached.
+
+**Measurements.** Vmax, Vmin, and Vpp = Vmax − Vmin are read from the captured
+trace; Vrms is the root-mean-square over the window; duty cycle, 10%–90% rise /
+fall times, mean, and (when both channels are on) CH1–CH2 phase are also
+available. These are taken from a *noiseless* copy of the signal — Vmax and Vmin
+are extreme values, and added noise pushes them apart but never together, which
+would inflate Vpp by roughly the noise amplitude. For the generator the displayed
+frequency is exact; for the microphone it is estimated from the spacing of the
+signal's mean-crossings, each located to sub-sample precision.
 
 **Spectrum.** The FFT view applies a periodic Hann window and a radix-2 fast Fourier transform, then
 plots the single-sided magnitude normalized so the largest bin reaches full height.
@@ -121,14 +128,13 @@ plots the single-sided magnitude normalized so the largest bin reaches full heig
 
 - **The scope is ideal.** No input impedance, probe loading, bandwidth limit, rise-time limit, or
   amplifier noise. Real scopes attenuate and distort near their bandwidth ceiling; this one does not.
-- **AC coupling is exact, not a filter.** A real scope's AC coupling is a high-pass filter with a
-  cutoff of a few hertz, which visibly droops the flat top of a low-frequency square wave. Here the
-  DC component is simply subtracted, so flat tops stay flat.
+  Probe ×1/×10 only scales the display factor; there is no separate physical attenuation network.
+- **AC coupling is a single-pole high-pass** with a fixed educational time constant (~10 ms), not a
+  full analog front-end. It droops square-wave tops and blocks DC, but is not matched to any specific
+  instrument's cutoff.
 - **Sampling is not modeled.** There is no sample-rate limit, no aliasing, and no interpolation
   artifact — the generator is evaluated exactly at each column. A real digital scope aliases badly
   once the signal approaches its sample rate.
-- **Channel 2 is always the generator**, never the microphone. It exists as the phase-shifted
-  reference for dual-trace and phase comparison.
 - **Trigger holdoff is not modeled**, and the trigger search covers a single period, so it finds the
   first crossing rather than tracking a specific one across sweeps.
 - **Injected noise is uniform and independent per sample** (white), not the pink or thermal noise of
