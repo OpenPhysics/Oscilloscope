@@ -31,6 +31,7 @@ import {
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
 import { spectrumMaxFrequency } from "../model/Spectrum.js";
 import { CursorReadoutNode } from "./CursorReadoutNode.js";
+import { DisplayControlPanel } from "./DisplayControlPanel.js";
 import { HorizontalControlPanel } from "./HorizontalControlPanel.js";
 import { LabActivitiesDialog } from "./LabActivitiesDialog.js";
 import { MeasurementReadoutNode } from "./MeasurementReadoutNode.js";
@@ -200,6 +201,7 @@ export class OscilloscopeScreenView extends ScreenView {
     });
     const horizontalPanel = new HorizontalControlPanel(model);
     const triggerPanel = new TriggerControlPanel(model);
+    const displayPanel = new DisplayControlPanel(model);
     const verticalPanel = new VerticalControlPanel(model, {
       ch1Bnc: patchLayer.ch1Bnc,
       ch2Bnc: patchLayer.ch2Bnc,
@@ -247,6 +249,11 @@ export class OscilloscopeScreenView extends ScreenView {
     triggerPanel.left = horizontalPanel.right + 12;
     triggerPanel.top = softAcquirePanel.bottom + 10;
 
+    // CRT beam controls sit under the Vertical | Horizontal | Trigger row.
+    const controlRowBottom = Math.max(verticalPanel.bottom, horizontalPanel.bottom, triggerPanel.bottom);
+    displayPanel.left = controlsLeft;
+    displayPanel.top = controlRowBottom + 10;
+
     // Generator under the CRT on the left; wires reach rightward to the BNCs.
     generatorPanel.left = SCREEN_VIEW_MARGIN;
     generatorPanel.top = displayNode.bottom + 16;
@@ -255,6 +262,7 @@ export class OscilloscopeScreenView extends ScreenView {
     this.addChild(horizontalPanel);
     this.addChild(triggerPanel);
     this.addChild(verticalPanel);
+    this.addChild(displayPanel);
     this.addChild(generatorPanel);
     this.addChild(patchLayer);
 
@@ -281,6 +289,7 @@ export class OscilloscopeScreenView extends ScreenView {
           ...horizontalPanel.controlsInOrder,
           ...triggerPanel.controlsInOrder,
           ...verticalPanel.controlsInOrder,
+          ...displayPanel.controlsInOrder,
           patchLayer.sourceJackA,
           patchLayer.sourceJackB,
           patchLayer.sourceJackMic,
@@ -314,6 +323,9 @@ export class OscilloscopeScreenView extends ScreenView {
       model.displayModeProperty,
       model.mathModeProperty,
       model.persistenceProperty,
+      model.intensityProperty,
+      model.focusProperty,
+      model.beamFinderProperty,
       model.cursorsEnabledProperty,
       model.cursorTime1Property,
       model.cursorTime2Property,
@@ -321,9 +333,13 @@ export class OscilloscopeScreenView extends ScreenView {
       model.cursorVolt2Property,
       model.trigger.sourceProperty,
       model.trigger.levelProperty,
+      model.trigger.holdoffProperty,
       model.timePerDivisionProperty,
       model.horizontalPositionProperty,
       model.magnifyProperty,
+      model.delayedSweepModeProperty,
+      model.delayProperty,
+      model.delayedTimePerDivisionProperty,
     );
     for (const property of this.renderInputs) {
       property.lazyLink(this.markRedrawDirty);
@@ -376,8 +392,8 @@ export class OscilloscopeScreenView extends ScreenView {
     this.measuredVrms.value = n > 0 ? Math.sqrt(sumSquares / n) : 0;
     this.measuredMean.value = meanOf(signed);
     this.measuredDutyCycle.value = estimateDutyCycle(signed);
-    this.measuredRiseTime.value = estimateRiseTime(signed, model.timeWindow);
-    this.measuredFallTime.value = estimateFallTime(signed, model.timeWindow);
+    this.measuredRiseTime.value = estimateRiseTime(signed, model.displayedTimeWindow);
+    this.measuredFallTime.value = estimateFallTime(signed, model.displayedTimeWindow);
 
     const hz = this.measureFrequency(signed);
     this.measuredFrequency.value = hz;
@@ -386,13 +402,13 @@ export class OscilloscopeScreenView extends ScreenView {
     this.updatePhaseMeasurement();
 
     const deltaDivisionsTime = Math.abs(model.cursorTime2Property.value - model.cursorTime1Property.value);
-    const deltaTime = deltaDivisionsTime * model.effectiveTimePerDivision;
+    const deltaTime = deltaDivisionsTime * model.displayedTimePerDivision;
     this.measuredDeltaTime.value = deltaTime;
     this.measuredCursorFrequency.value = deltaTime > 0 ? 1 / deltaTime : 0;
     const deltaDivisionsVolt = Math.abs(model.cursorVolt1Property.value - model.cursorVolt2Property.value);
     this.measuredDeltaVoltage.value = deltaDivisionsVolt * model.primaryChannel.effectiveVoltsPerDivision;
 
-    const fMax = spectrumMaxFrequency(model.sampleCount, model.timeWindow);
+    const fMax = spectrumMaxFrequency(model.sampleCount, model.displayedTimeWindow);
     const f1 = (model.cursorTime1Property.value / HORIZONTAL_DIVISIONS) * fMax;
     const f2 = (model.cursorTime2Property.value / HORIZONTAL_DIVISIONS) * fMax;
     this.measuredFrequency1.value = f1;
@@ -417,7 +433,7 @@ export class OscilloscopeScreenView extends ScreenView {
       return 0;
     }
     if (input === "microphone" || model.functionGenerator.waveformProperty.value === "noise") {
-      return estimateFrequency(signed, model.timeWindow);
+      return estimateFrequency(signed, model.displayedTimeWindow);
     }
     return model.functionGenerator.frequencyProperty.value;
   }
@@ -453,7 +469,7 @@ export class OscilloscopeScreenView extends ScreenView {
       a[i] = s1 * (ch1[i] ?? 0);
       b[i] = s2 * (ch2[i] ?? 0);
     }
-    this.measuredPhase.value = estimatePhaseDegrees(a, b, model.timeWindow);
+    this.measuredPhase.value = estimatePhaseDegrees(a, b, model.displayedTimeWindow);
   }
 
   private autoset(): void {
@@ -462,6 +478,7 @@ export class OscilloscopeScreenView extends ScreenView {
 
     model.displayModeProperty.value = "yt";
     model.magnifyProperty.value = false;
+    model.delayedSweepModeProperty.value = "off";
     model.horizontalPositionProperty.value = 0;
 
     // Ensure CH1 has a signal to autoset against.
@@ -507,7 +524,7 @@ export class OscilloscopeScreenView extends ScreenView {
   private exportCsv(): void {
     const model = this.model;
     const n = model.sampleCount;
-    const dt = n > 1 ? model.timeWindow / (n - 1) : 0;
+    const dt = n > 1 ? model.displayedTimeWindow / (n - 1) : 0;
 
     const columns: { header: string; data: Float32Array }[] = [];
     if (model.ch1.enabledProperty.value) {

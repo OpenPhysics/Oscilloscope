@@ -20,6 +20,7 @@ import { StringManager } from "../src/i18n/StringManager.js";
 import { OscilloscopeModel } from "../src/oscilloscope-screen/model/OscilloscopeModel.js";
 import { BncJackNode } from "../src/oscilloscope-screen/view/BncJackNode.js";
 import { CursorReadoutNode } from "../src/oscilloscope-screen/view/CursorReadoutNode.js";
+import { DisplayControlPanel } from "../src/oscilloscope-screen/view/DisplayControlPanel.js";
 import { HorizontalControlPanel } from "../src/oscilloscope-screen/view/HorizontalControlPanel.js";
 import { MeasurementCursorNode } from "../src/oscilloscope-screen/view/MeasurementCursorNode.js";
 import { MeasurementReadoutNode } from "../src/oscilloscope-screen/view/MeasurementReadoutNode.js";
@@ -291,6 +292,7 @@ describe("Memory leak regression", () => {
   it.each([
     ["HorizontalControlPanel", (model: OscilloscopeModel) => new HorizontalControlPanel(model)],
     ["TriggerControlPanel", (model: OscilloscopeModel) => new TriggerControlPanel(model)],
+    ["DisplayControlPanel", (model: OscilloscopeModel) => new DisplayControlPanel(model)],
     [
       "VerticalControlPanel",
       (model: OscilloscopeModel) => new VerticalControlPanel(model, { ch1Bnc: new Node(), ch2Bnc: new Node() }),

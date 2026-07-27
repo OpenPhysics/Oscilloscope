@@ -114,6 +114,11 @@ export class StringManager {
     return stringProperties.trigger;
   }
 
+  /** CRT display control labels (intensity, focus, beam find). */
+  public getDisplay() {
+    return stringProperties.display;
+  }
+
   /** Acquisition / display control labels (run/stop, single, autoset, math, …). */
   public getAcquisition() {
     return stringProperties.acquisition;

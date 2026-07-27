@@ -47,6 +47,8 @@ const CENTER_Y = DISPLAY_HEIGHT / 2;
 const FACE_LINE_WIDTH = 3;
 /** Stroke width of the glowing waveform traces, in screen pixels. */
 const TRACE_LINE_WIDTH = 2;
+/** Extra stroke width added at full defocus (focus = 0), in screen pixels. */
+const DEFOCUS_EXTRA_WIDTH = 3.5;
 /** Stroke width of the graticule grid, axes, and cursor/trigger lines, in screen pixels. */
 const THIN_LINE_WIDTH = 1;
 /** Opacity of the freshest persistence "afterglow" ghost; older ones fade from here. */
@@ -77,6 +79,15 @@ export class OscilloscopeDisplayNode extends Node {
   private readonly triggerMarker: Node;
   private readonly triggerLine: Path;
   private readonly cursorLayer: Node;
+  /** Brightened band marking the delayed-sweep window on the main trace. */
+  private readonly delayZone: Rectangle;
+
+  /** The clipped layer holding every waveform trace; its opacity is the CRT intensity. */
+  private readonly traceLayer: Node;
+  /** Every waveform Path, so focus (line width) can be applied uniformly. */
+  private readonly tracePaths: Path[];
+  /** Whether BEAM FIND is engaged this frame; hard-clamps traces onto the graticule. */
+  private beamFinderActive = false;
 
   /**
    * Recent CH1 sweeps, newest first, drawn behind the live trace at decreasing
@@ -151,6 +162,16 @@ export class OscilloscopeDisplayNode extends Node {
     this.addChild(axisPath);
     this.ownedChildren.push(axisPath);
 
+    // ── Delayed-sweep intensified band (behind the traces) ────────────────────
+    // In "intensified" delayed-sweep mode this marks, on the main trace, the slice
+    // the delayed timebase magnifies.
+    this.delayZone = new Rectangle(0, 0, 0, DISPLAY_HEIGHT, {
+      fill: OscilloscopeColors.delayZoneColorProperty,
+      visible: false,
+    });
+    this.addChild(this.delayZone);
+    this.ownedChildren.push(this.delayZone);
+
     // ── Trace layer (clipped to the CRT face) ─────────────────────────────────
     // Index 0 holds the freshest ghost and fades linearly with age.
     this.ghostPaths = Array.from(
@@ -205,6 +226,8 @@ export class OscilloscopeDisplayNode extends Node {
       ],
       clipArea: Shape.rect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT),
     });
+    this.traceLayer = traceLayer;
+    this.tracePaths = [...this.ghostPaths, this.mathPath, this.ch2Path, this.ch1Path, this.xyPath, this.fftPath];
     this.addChild(traceLayer);
     this.ownedChildren.push(
       traceLayer,
@@ -304,7 +327,7 @@ export class OscilloscopeDisplayNode extends Node {
     for (let i = 0; i < n; i++) {
       const x = (i / (n - 1)) * DISPLAY_WIDTH;
       const raw = base - sign * (voltages[i] ?? 0) * pxPerVolt;
-      const y = Math.max(-TRACE_CLIP_MARGIN, Math.min(DISPLAY_HEIGHT + TRACE_CLIP_MARGIN, raw));
+      const y = this.clampY(raw);
       if (i === 0) {
         shape.moveTo(x, y);
       } else {
@@ -314,8 +337,38 @@ export class OscilloscopeDisplayNode extends Node {
     return shape;
   }
 
+  /**
+   * Clamps a display-local y to the drawable area. BEAM FIND clamps hard onto the
+   * graticule (an off-screen trace is pulled to the nearest edge); otherwise the
+   * usual small overscan margin is allowed before the clip removes it.
+   */
+  private clampY(raw: number): number {
+    const m = this.beamFinderActive ? 0 : TRACE_CLIP_MARGIN;
+    return Math.max(-m, Math.min(DISPLAY_HEIGHT + m, raw));
+  }
+
+  /** Clamps a display-local x to the drawable area (used by X-Y mode). */
+  private clampX(raw: number): number {
+    const m = this.beamFinderActive ? 0 : TRACE_CLIP_MARGIN;
+    return Math.max(-m, Math.min(DISPLAY_WIDTH + m, raw));
+  }
+
+  /** Applies the CRT beam controls: intensity (layer opacity) and focus (line width). */
+  private applyBeamControls(): void {
+    const model = this.model;
+    this.beamFinderActive = model.beamFinderProperty.value;
+    // BEAM FIND overrides intensity to full so a dim or off-screen trace is found.
+    this.traceLayer.opacity = this.beamFinderActive ? 1 : model.intensityProperty.value;
+    // Focus 1 is a sharp hairline; lower focus thickens the stroke like a defocused beam.
+    const width = TRACE_LINE_WIDTH + (1 - model.focusProperty.value) * DEFOCUS_EXTRA_WIDTH;
+    for (const path of this.tracePaths) {
+      path.lineWidth = width;
+    }
+  }
+
   /** Redraws every trace and the trigger marker from current model state. */
   public update(): void {
+    this.applyBeamControls();
     const mode = this.model.displayModeProperty.value;
     if (mode === "xy") {
       this.updateXY();
@@ -339,6 +392,7 @@ export class OscilloscopeDisplayNode extends Node {
     this.fftPath.shape = null;
     this.xyPath.shape = this.buildXYShape();
     this.triggerMarker.visible = false;
+    this.delayZone.visible = false;
     this.cursorLayer.visible = false;
   }
 
@@ -347,6 +401,7 @@ export class OscilloscopeDisplayNode extends Node {
     this.xyPath.shape = null;
     this.fftPath.shape = this.buildFFTShape();
     this.triggerMarker.visible = false;
+    this.delayZone.visible = false;
 
     const cursorsOn = this.model.cursorsEnabledProperty.value;
     this.cursorLayer.visible = cursorsOn;
@@ -364,7 +419,11 @@ export class OscilloscopeDisplayNode extends Node {
     const model = this.model;
     this.xyPath.shape = null;
     this.fftPath.shape = null;
-    this.triggerMarker.visible = true;
+    // The trigger marker sits on a channel's displayed trace; LINE and EXT trigger
+    // on their own reference signals, which are not drawn, so there is nothing to
+    // mark. The TriggerControlPanel's level knob remains the keyboard equivalent.
+    const source = model.trigger.sourceProperty.value;
+    this.triggerMarker.visible = source === "ch1" || source === "ch2";
     this.cursorLayer.visible = model.cursorsEnabledProperty.value;
     for (const cursor of this.cursorsInOrder) {
       cursor.visible = true;
@@ -376,6 +435,27 @@ export class OscilloscopeDisplayNode extends Node {
 
     this.updatePersistence(this.ch1Path.shape);
     this.updateTriggerMarker();
+    this.updateDelayZone();
+  }
+
+  /**
+   * Positions the brightened delayed-sweep band. It spans, in main-sweep divisions,
+   * from the delay marker to the end of the delayed window, and shows only in the
+   * "intensified" delayed-sweep mode (in "delayed" mode the whole face *is* the zoom).
+   */
+  private updateDelayZone(): void {
+    const model = this.model;
+    if (model.delayedSweepModeProperty.value !== "intensified") {
+      this.delayZone.visible = false;
+      return;
+    }
+    const mainPerDiv = model.effectiveTimePerDivision;
+    const widthDiv = mainPerDiv > 0 ? model.delayedWindow / mainPerDiv : 0;
+    const startX = model.delayProperty.value * DIVISION_SIZE;
+    const endX = Math.min(DISPLAY_WIDTH, startX + widthDiv * DIVISION_SIZE);
+    const x = Math.max(0, Math.min(DISPLAY_WIDTH, startX));
+    this.delayZone.setRect(x, 0, Math.max(0, endX - x), DISPLAY_HEIGHT);
+    this.delayZone.visible = true;
   }
 
   /** Ages the afterglow chain by one sweep and repaints the ghosts. */
@@ -407,7 +487,7 @@ export class OscilloscopeDisplayNode extends Node {
     for (let i = 0; i < n; i++) {
       const x = (i / (n - 1)) * DISPLAY_WIDTH;
       const raw = CENTER_Y - (model.mathTrace[i] ?? 0) * pxPerVolt;
-      const y = Math.max(-TRACE_CLIP_MARGIN, Math.min(DISPLAY_HEIGHT + TRACE_CLIP_MARGIN, raw));
+      const y = this.clampY(raw);
       if (i === 0) {
         shape.moveTo(x, y);
       } else {
@@ -446,8 +526,8 @@ export class OscilloscopeDisplayNode extends Node {
     for (let i = 0; i < n; i++) {
       const x = CENTER_X + s1 * (x1[i] ?? 0) * pxX;
       const y = CENTER_Y - s2 * (y2[i] ?? 0) * pxY;
-      const cx = Math.max(-TRACE_CLIP_MARGIN, Math.min(DISPLAY_WIDTH + TRACE_CLIP_MARGIN, x));
-      const cy = Math.max(-TRACE_CLIP_MARGIN, Math.min(DISPLAY_HEIGHT + TRACE_CLIP_MARGIN, y));
+      const cx = this.clampX(x);
+      const cy = this.clampY(y);
       if (i === 0) {
         shape.moveTo(cx, cy);
       } else {

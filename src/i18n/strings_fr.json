@@ -55,7 +55,13 @@
     "position": "Position",
     "magnify": "×10 Amp",
     "xyMode": "X-Y",
-    "fft": "FFT"
+    "fft": "FFT",
+    "delayedMode": "Balayage retardé",
+    "delayedOff": "Arrêt",
+    "delayedIntensified": "Princ.",
+    "delayedDelayed": "Retardé",
+    "delay": "Retard",
+    "delayedScale": "Éch. retard"
   },
   "trigger": {
     "title": "Déclenchement",
@@ -65,11 +71,20 @@
     "mode": "Mode",
     "ch1": "CH1",
     "ch2": "CH2",
+    "line": "Secteur",
+    "ext": "Ext",
     "rising": "Montante",
     "falling": "Descendante",
     "auto": "Auto",
     "normal": "Normal",
-    "single": "Unique"
+    "single": "Unique",
+    "holdoff": "Inhibition"
+  },
+  "display": {
+    "title": "Affichage",
+    "intensity": "Intensité",
+    "focus": "Focalisation",
+    "beamFind": "Cherche faisceau"
   },
   "acquisition": {
     "title": "Acquérir",
@@ -156,6 +171,9 @@
       "timePerDivision": "Temps par division",
       "horizontalPosition": "Position horizontale",
       "magnify": "Amplificateur horizontal dix fois",
+      "delayedSweep": "Mode de balayage retardé",
+      "delayPosition": "Position du retard",
+      "delayedTimePerDivision": "Temps par division retardé",
       "xyMode": "Mode d'affichage X-Y",
       "fft": "Affichage du spectre FFT",
       "cursors": "Activer les curseurs de mesure",
@@ -172,10 +190,14 @@
       "triggerLevel": "Niveau de déclenchement",
       "triggerSlope": "Pente de déclenchement",
       "triggerMode": "Mode de déclenchement",
+      "triggerHoldoff": "Temps d’inhibition du déclenchement",
       "runStop": "Démarrer ou arrêter l'acquisition",
       "single": "Capture à déclenchement unique",
       "autoset": "Auto-régler l'affichage sur le signal",
       "persistence": "Persistance de la forme d'onde",
+      "intensity": "Intensité de la trace",
+      "focus": "Focalisation de la trace",
+      "beamFind": "Recherche du faisceau",
       "math": "Voie mathématique",
       "fgOutA": "Sortie A du générateur de fonctions",
       "fgOutB": "Sortie B du générateur de fonctions",

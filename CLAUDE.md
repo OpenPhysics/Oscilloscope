@@ -8,12 +8,14 @@ A single-screen SceneryStack **oscilloscope** simulation modelled on a real benc
 vertical channels (**CH1 / CH2**), each with its own volts/div, position, AC-DC-GND coupling,
 invert, and on/off. CH1's input is a built-in **function generator** (sine / square / triangle /
 sawtooth / pulse / noise, with amplitude, DC offset, duty cycle, and a CH2 phase shift) or **live
-microphone audio** (Web Audio API). It has a horizontal timebase (time/div, position, ×10 magnify),
-a **trigger** system (source / level / slope / mode, with a draggable on-screen level line), Y-T,
-**X-Y**, and **FFT** (spectrum) display modes, a CH1±CH2 **math** trace, optional persistence,
-draggable **measurement cursors** (Δt / 1÷Δt / ΔV), **CSV / PNG export**, Run/Stop, Single, Autoset,
-and live auto-measurements (freq / period / Vpp / Vrms / Vmax / Vmin). Optional signal-noise injection
-is in Preferences.
+microphone audio** (Web Audio API). It has a horizontal timebase (time/div, position, ×10 magnify)
+with a **delayed sweep** (second timebase: off / intensified / delayed, with delay position and
+delayed time/div), a **trigger** system (source `CH1`/`CH2`/`LINE`/`EXT`, level, slope, mode, and
+**holdoff**, with a draggable on-screen level line), **CRT beam controls** (intensity / focus / beam
+find), Y-T, **X-Y**, and **FFT** (spectrum) display modes, a CH1±CH2 **math** trace, optional
+persistence, draggable **measurement cursors** (Δt / 1÷Δt / ΔV), **CSV / PNG export**, Run/Stop,
+Single, Autoset, and live auto-measurements (freq / period / Vpp / Vrms / Vmax / Vmin / duty / rise /
+fall / mean / phase). Optional signal-noise injection is in Preferences.
 
 The defining UI decision: **the scope's own front panel is built from real-instrument widgets —
 rotary knobs, detented rotary switches, and panel buttons, never sliders.** The function generator
@@ -35,6 +37,26 @@ accessibility** wiring. For multi-screen sims, see [`doc/multi-screen.md`](doc/m
   capture clears `trigger.armedProperty` and stops the clock. Arming happens on two edges —
   selecting SINGLE, and `isPlayingProperty` going true (so RUN re-arms). The front-panel SINGLE key
   calls `model.captureSingle()`, which goes *through* those edges rather than around them.
+- **`LINE` and `EXT` trigger sources bypass the channel view.** `acquireTrigger()` runs the same
+  `computeCrossingOffset()` comparator against an internal `LINE_FREQUENCY` mains sine (`LINE`) or the
+  generator's own output A (`EXT`, using the raw front-panel level), so they fire even when every
+  channel is grounded — the trigger marker hides for these, since there is no drawn trace to sit on.
+  `computeCrossingOffset()` seeds its previous sample from one step *before* t=0 (the sampler is
+  periodic), so a crossing exactly on the period boundary — a level-0 sine starting on its own rising
+  edge, where `Math.sin(2π)` is a hair negative — is not stepped past.
+- **Trigger holdoff** is a real front-panel control (`Trigger.holdoffProperty`) that makes the
+  comparator take the first crossing at/after the holdoff time. On the six built-in single-edge-per-cycle
+  waveforms this only skips whole periods and lands on the same phase, so the stable display is
+  unchanged — exactly as a bench scope behaves on a simple repetitive signal; its visible effect is on
+  multi-edge signals.
+- **Delayed sweep is a second sampling window.** `delayedActive` (only in `delayed` mode, and inert
+  while a mic is patched) swaps `fillFromGenerator`'s window for `delayedWindow` starting at
+  `t0 + delaySeconds`; `displayedTimeWindow` / `displayedTimePerDivision` feed the measurement pass so
+  cursors and readouts describe whichever sweep is on screen. The `intensified` mode instead draws a
+  brightened band (`delayZone`) marking that slice on the main trace.
+- **CRT beam controls shape how the trace is drawn, not what it holds.** Intensity is the trace-layer
+  opacity, focus sets the stroke width (sharp hairline → defocused), and BEAM FIND overrides intensity
+  to full and hard-clamps the trace onto the graticule so an off-screen sweep can be found.
 - **The comparator watches what the channel displays, not the raw source.** `triggerViewFor()` maps
   the front-panel level and slope — which the user sets against the on-screen marker — into the raw
   signal `computeTriggerOffset()` searches: the displayed trace is `sign · (source − dc)`, so a
@@ -128,8 +150,9 @@ that constraint directly so the override does not come back.
 | `src/common/DisposalBag.ts` | Teardown collector every disposable view component drains in `dispose()` |
 | `src/oscilloscope-screen/view/SignalGeneratorPanel.ts` | Waveform combo + freq/ampl/offset/duty/phase sliders, mic status, source jacks |
 | `src/oscilloscope-screen/view/VerticalControlPanel.ts` | Per-channel volts/div, position, coupling, invert, on/off |
-| `src/oscilloscope-screen/view/HorizontalControlPanel.ts` | Time/div, position, ×10 magnify, X-Y |
-| `src/oscilloscope-screen/view/TriggerControlPanel.ts` | Trigger source / level / slope / mode |
+| `src/oscilloscope-screen/view/HorizontalControlPanel.ts` | Time/div, position, ×10 magnify, X-Y, delayed sweep (mode / delay / delayed time-div) |
+| `src/oscilloscope-screen/view/TriggerControlPanel.ts` | Trigger source (CH1/CH2/LINE/EXT) / level / slope / mode / holdoff |
+| `src/oscilloscope-screen/view/DisplayControlPanel.ts` | CRT beam controls: intensity / focus / beam find |
 | `src/oscilloscope-screen/view/SoftAcquirePanel.ts` | Cursor, Measure, Lab, Run/Stop, Single, Autoset, Persist, export |
 | `src/oscilloscope-screen/view/labActivities.ts` | Guided lab presets (Vpp, Normal trigger, 3rd harmonic, Lissajous) |
 | `src/oscilloscope-screen/view/LabActivitiesDialog.ts` | Soft-key Lab dialog that applies a preset |

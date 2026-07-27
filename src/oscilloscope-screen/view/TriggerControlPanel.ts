@@ -14,11 +14,11 @@ import { RotarySwitch } from "../../common/controls/RotarySwitch.js";
 import { DisposalBag } from "../../common/DisposalBag.js";
 import { SimPanel } from "../../common/SimPanel.js";
 import { StringManager } from "../../i18n/StringManager.js";
-import { SCOPE_TRIGGER_LEVEL_RANGE } from "../../SimConstants.js";
+import { SCOPE_TRIGGER_HOLDOFF_RANGE, SCOPE_TRIGGER_LEVEL_RANGE } from "../../SimConstants.js";
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
 import { TRIGGER_MODES, TRIGGER_SOURCES } from "../model/Trigger.js";
 import { derivedString, unionItems } from "./controlHelpers.js";
-import { formatVoltage } from "./formatUnits.js";
+import { formatHoldoff, formatVoltage } from "./formatUnits.js";
 import { withSectionHeader } from "./panelSection.js";
 
 export class TriggerControlPanel extends SimPanel {
@@ -35,7 +35,12 @@ export class TriggerControlPanel extends SimPanel {
 
     const sourceSwitch = new RotarySwitch(
       trigger.sourceProperty,
-      unionItems(TRIGGER_SOURCES, { ch1: t.ch1StringProperty, ch2: t.ch2StringProperty }),
+      unionItems(TRIGGER_SOURCES, {
+        ch1: t.ch1StringProperty,
+        ch2: t.ch2StringProperty,
+        line: t.lineStringProperty,
+        ext: t.extStringProperty,
+      }),
       { radius: 18, captionStringProperty: t.sourceStringProperty, accessibleName: a11y.triggerSourceStringProperty },
     );
 
@@ -76,18 +81,38 @@ export class TriggerControlPanel extends SimPanel {
       { radius: 20, captionStringProperty: t.modeStringProperty, accessibleName: a11y.triggerModeStringProperty },
     );
 
+    const holdoffReadoutProperty = derivedString(trigger.holdoffProperty, formatHoldoff);
+    const holdoffKnob = new RotaryKnob(trigger.holdoffProperty, SCOPE_TRIGGER_HOLDOFF_RANGE, {
+      radius: 18,
+      captionStringProperty: t.holdoffStringProperty,
+      valueStringProperty: holdoffReadoutProperty,
+      accessibleName: a11y.triggerHoldoffStringProperty,
+    });
+
     const body = new VBox({
       align: "left",
       spacing: 10,
-      children: [new HBox({ spacing: 14, align: "top", children: [sourceSwitch, levelKnob, modeSwitch] }), slopeButton],
+      children: [
+        new HBox({ spacing: 14, align: "top", children: [sourceSwitch, levelKnob, modeSwitch] }),
+        new HBox({ spacing: 14, align: "center", children: [slopeButton, holdoffKnob] }),
+      ],
     });
 
     super(withSectionHeader(t.titleStringProperty, body, { bag }));
 
     this.bag = bag;
-    this.bag.own(sourceSwitch, levelKnob, slopeButton, modeSwitch, slopeLabelProperty, levelReadoutProperty);
+    this.bag.own(
+      sourceSwitch,
+      levelKnob,
+      slopeButton,
+      modeSwitch,
+      holdoffKnob,
+      slopeLabelProperty,
+      levelReadoutProperty,
+      holdoffReadoutProperty,
+    );
 
-    this.controlsInOrder = [sourceSwitch, levelKnob, slopeButton, modeSwitch];
+    this.controlsInOrder = [sourceSwitch, levelKnob, slopeButton, modeSwitch, holdoffKnob];
   }
 
   public override dispose(): void {

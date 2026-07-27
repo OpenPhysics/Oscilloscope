@@ -31,9 +31,17 @@ import {
   CURSOR_TIME_RANGE,
   CURSOR_VOLT_RANGE,
   HORIZONTAL_DIVISIONS,
+  LINE_FREQUENCY,
+  SCOPE_DEFAULT_DELAY,
+  SCOPE_DEFAULT_DELAYED_TIME_PER_DIV,
+  SCOPE_DEFAULT_FOCUS,
+  SCOPE_DEFAULT_INTENSITY,
   SCOPE_DEFAULT_TIME_PER_DIV,
   SCOPE_DEFAULT_VOLTS_PER_DIV,
+  SCOPE_DELAY_RANGE,
+  SCOPE_FOCUS_RANGE,
   SCOPE_HORIZONTAL_POSITION_RANGE,
+  SCOPE_INTENSITY_RANGE,
   SCOPE_MAGNIFY_FACTOR,
   SCOPE_TIME_PER_DIV_RANGE,
   SCOPE_TIME_PER_DIV_STEPS,
@@ -58,6 +66,15 @@ export type DisplayMode = (typeof DISPLAY_MODES)[number];
 /** The optional CH1±CH2 math trace. */
 export const MATH_MODES = ["off", "add", "subtract"] as const;
 export type MathMode = (typeof MATH_MODES)[number];
+
+/**
+ * Delayed-sweep (second timebase) display mode:
+ *   - `off`         — a single main sweep
+ *   - `intensified` — the main sweep, with the delayed window brightened on it
+ *   - `delayed`     — the delayed window, zoomed to the delayed time/div
+ */
+export const DELAYED_SWEEP_MODES = ["off", "intensified", "delayed"] as const;
+export type DelayedSweepMode = (typeof DELAYED_SWEEP_MODES)[number];
 
 /**
  * The mean of a filled buffer. Used for the microphone AC path, where no
@@ -221,6 +238,22 @@ export class OscilloscopeModel implements TModel {
   /** Whether the ×10 horizontal magnifier is engaged. */
   public readonly magnifyProperty = new BooleanProperty(false);
 
+  /** Delayed-sweep (second timebase) display mode. */
+  public readonly delayedSweepModeProperty = new StringUnionProperty<DelayedSweepMode>("off", {
+    validValues: [...DELAYED_SWEEP_MODES],
+  });
+
+  /** Position of the delay marker on the main sweep, in divisions from the left edge. */
+  public readonly delayProperty = new NumberProperty(SCOPE_DEFAULT_DELAY, {
+    range: SCOPE_DELAY_RANGE,
+  });
+
+  /** Delayed timebase sensitivity, in seconds per division (the zoom of the delayed slice). */
+  public readonly delayedTimePerDivisionProperty = new NumberProperty(SCOPE_DEFAULT_DELAYED_TIME_PER_DIV, {
+    range: SCOPE_TIME_PER_DIV_RANGE,
+    units: "s",
+  });
+
   /** Y-T versus X-Y versus FFT display. */
   public readonly displayModeProperty = new StringUnionProperty<DisplayMode>("yt", {
     validValues: [...DISPLAY_MODES],
@@ -228,6 +261,22 @@ export class OscilloscopeModel implements TModel {
 
   /** Whether previous sweeps linger (afterglow / persistence). */
   public readonly persistenceProperty = new BooleanProperty(false);
+
+  /** CRT beam intensity (trace brightness), 0.2–1. */
+  public readonly intensityProperty = new NumberProperty(SCOPE_DEFAULT_INTENSITY, {
+    range: SCOPE_INTENSITY_RANGE,
+  });
+
+  /** CRT beam focus: 1 draws a sharp hairline, lower values defocus (thicken) it. */
+  public readonly focusProperty = new NumberProperty(SCOPE_DEFAULT_FOCUS, {
+    range: SCOPE_FOCUS_RANGE,
+  });
+
+  /**
+   * Whether BEAM FIND is engaged: overrides intensity to full and pulls an
+   * off-screen trace back inside the graticule, matching a scope's beam-finder key.
+   */
+  public readonly beamFinderProperty = new BooleanProperty(false);
 
   /** The CH1±CH2 math trace mode. */
   public readonly mathModeProperty = new StringUnionProperty<MathMode>("off", {
@@ -388,6 +437,35 @@ export class OscilloscopeModel implements TModel {
     return this.effectiveTimePerDivision * HORIZONTAL_DIVISIONS;
   }
 
+  /**
+   * Whether the delayed timebase is being displayed (the zoomed slice). The
+   * microphone path has no analytic pre-roll to sample outside its capture, so the
+   * delayed sweep is a generator/analytic feature and is inert while a mic is patched.
+   */
+  public get delayedActive(): boolean {
+    return this.delayedSweepModeProperty.value === "delayed" && !this.microphoneInUse;
+  }
+
+  /** Time spanned by the delayed sweep across the whole graticule, in seconds. */
+  public get delayedWindow(): number {
+    return this.delayedTimePerDivisionProperty.value * HORIZONTAL_DIVISIONS;
+  }
+
+  /** The delay from the trigger to the start of the delayed window, in seconds. */
+  public get delaySeconds(): number {
+    return (this.delayProperty.value - HORIZONTAL_DIVISIONS / 2) * this.effectiveTimePerDivision;
+  }
+
+  /** Seconds per division of whatever sweep is currently on screen (main or delayed). */
+  public get displayedTimePerDivision(): number {
+    return this.delayedActive ? this.delayedTimePerDivisionProperty.value : this.effectiveTimePerDivision;
+  }
+
+  /** Time spanned by whatever sweep is currently on screen, in seconds. */
+  public get displayedTimeWindow(): number {
+    return this.delayedActive ? this.delayedWindow : this.timeWindow;
+  }
+
   public get ch1Trace(): Float32Array {
     return this.ch1Buffer;
   }
@@ -476,44 +554,82 @@ export class OscilloscopeModel implements TModel {
    *   and `single` hold their last capture.
    */
   private acquireTrigger(): boolean {
-    const triggerChannel = this.trigger.sourceProperty.value === "ch2" ? this.ch2 : this.ch1;
-    const triggerInput = triggerChannel.inputProperty.value;
-    const triggerIsMic = triggerInput === "microphone";
+    const source = this.trigger.sourceProperty.value;
+    const holdoff = this.trigger.holdoffProperty.value;
+    this.triggerOffsetSeconds = 0;
 
-    // The comparator watches what the channel displays, so the front-panel level
-    // and slope are mapped through that channel's coupling and invert first. For
-    // the microphone there is no analytic DC, so the previous frame's window mean
-    // stands in — the scratch buffer still holds it until fillTrace() overwrites it.
-    const triggerView = this.triggerViewFor(
-      triggerChannel,
-      triggerIsMic ? windowMean(this.audioScratchBuffer) : this.functionGenerator.meanVoltage,
-    );
+    // A channel source (CH1/CH2) watches what that channel displays, so the
+    // front-panel level and slope are mapped through its coupling and invert. LINE
+    // and EXT are their own reference signals and use no channel.
+    const sourceChannel = source === "ch1" ? this.ch1 : source === "ch2" ? this.ch2 : null;
+    const sourceIsMic = sourceChannel?.inputProperty.value === "microphone";
+    const channelView = sourceChannel
+      ? this.triggerViewFor(
+          sourceChannel,
+          sourceIsMic ? windowMean(this.audioScratchBuffer) : this.functionGenerator.meanVoltage,
+        )
+      : null;
 
-    // Resample the microphone even when the trigger channel is grounded — the
-    // other channel may be the one holding the mic.
+    // Resample the microphone whenever it is patched, regardless of the trigger
+    // source — a channel may be holding the mic even when LINE/EXT drives the
+    // sweep. Only when the mic *is* the trigger source do its level/slope matter.
     const audioTriggered = this.microphoneInUse
       ? this.audioInput.fillTrace(
           this.audioScratchBuffer,
           this.timeWindow,
-          triggerView?.level ?? 0,
-          triggerView?.rising === false ? "falling" : "rising",
+          sourceIsMic ? (channelView?.level ?? 0) : 0,
+          sourceIsMic && channelView?.rising === false ? "falling" : "rising",
         )
       : false;
 
-    this.triggerOffsetSeconds = 0;
+    const rising = this.trigger.slopeProperty.value === "rising";
+    const fg = this.functionGenerator;
 
-    // Grounded trigger channel: no signal to compare against.
-    if (!triggerView) {
+    if (source === "line") {
+      // Trigger on the internal AC-mains reference (a fixed sine). A signal
+      // harmonically related to the mains stands still; an unrelated one rolls.
+      const offset = this.computeCrossingOffset(
+        (t) => Math.sin(2 * Math.PI * LINE_FREQUENCY * t),
+        1 / LINE_FREQUENCY,
+        0,
+        rising,
+        holdoff,
+      );
+      this.triggerOffsetSeconds = offset ?? 0;
+      return offset !== null;
+    }
+
+    if (source === "ext") {
+      // Trigger on the generator's own output A as an external sync, independent of
+      // any channel's coupling/invert, using the raw front-panel level.
+      const f = fg.frequencyProperty.value;
+      if (f <= 0) {
+        return false;
+      }
+      const offset = this.computeCrossingOffset(
+        (t) => fg.cleanVoltageAt(t, 0),
+        1 / f,
+        this.trigger.levelProperty.value,
+        rising,
+        holdoff,
+      );
+      this.triggerOffsetSeconds = offset ?? 0;
+      return offset !== null;
+    }
+
+    // Channel source (CH1/CH2). A grounded channel has no signal to trigger on.
+    if (!channelView) {
       return false;
     }
-    if (triggerIsMic) {
+    if (sourceIsMic) {
       return audioTriggered;
     }
+    const input = sourceChannel?.inputProperty.value ?? "none";
     // Unpatched trigger source: free-run in auto; hold otherwise.
-    if (!this.isGeneratorInput(triggerInput)) {
+    if (!this.isGeneratorInput(input)) {
       return false;
     }
-    const offset = this.computeTriggerOffset(triggerInput, triggerView);
+    const offset = this.computeTriggerOffset(input, channelView, holdoff);
     this.triggerOffsetSeconds = offset ?? 0;
     return offset !== null;
   }
@@ -615,15 +731,22 @@ export class OscilloscopeModel implements TModel {
     coupling: Coupling,
   ): void {
     const n = buffer.length;
-    const windowSeconds = this.timeWindow;
     const fg = this.functionGenerator;
     const t0 = this.triggerOffsetSeconds;
-    const hShift = this.horizontalPositionProperty.value * this.effectiveTimePerDivision;
     const lastIndex = Math.max(1, n - 1);
     const dcVolts = fg.meanVoltage;
 
+    // The sweep spans `winWidth` seconds beginning at `winStart` (both measured from
+    // the trigger). The main sweep is centered on the trigger and shifted by the
+    // horizontal-position knob; the delayed sweep is a short window offset by the
+    // delay and zoomed to the delayed time/div.
+    const delayed = this.delayedActive;
+    const winWidth = delayed ? this.delayedWindow : this.timeWindow;
+    const hShift = this.horizontalPositionProperty.value * this.effectiveTimePerDivision;
+    const winStart = delayed ? t0 + this.delaySeconds : t0 - 0.5 * this.timeWindow - hShift;
+
     for (let i = 0; i < n; i++) {
-      const t = t0 + (i / lastIndex - 0.5) * windowSeconds - hShift;
+      const t = winStart + (i / lastIndex) * winWidth;
       const clean = fg.cleanVoltageAt(t, phaseDegrees);
       cleanBuffer[i] = clean;
       buffer[i] = clean + fg.noiseSample();
@@ -639,21 +762,20 @@ export class OscilloscopeModel implements TModel {
       // Seed the high-pass with its settled state so the visible window is not
       // skewed by the filter's startup transient. Noise is white, so both traces
       // are settled on the same clean carrier.
-      const tWindowStart = t0 - 0.5 * windowSeconds - hShift;
       const frequency = fg.frequencyProperty.value;
       const periodic = fg.waveformProperty.value !== "noise" && frequency > 0;
       const [prevX, prevY] = periodic
-        ? settleAcHighPass((t) => fg.cleanVoltageAt(t, phaseDegrees) - dcVolts, tWindowStart, 1 / frequency)
+        ? settleAcHighPass((t) => fg.cleanVoltageAt(t, phaseDegrees) - dcVolts, winStart, 1 / frequency)
         : // Aperiodic (the noise waveform) has no steady state to solve for, and
           // no DC to decay away either — it is already zero-mean, so starting the
           // filter at rest costs nothing visible.
-          [fg.cleanVoltageAt(tWindowStart, phaseDegrees) - dcVolts, 0];
+          [fg.cleanVoltageAt(winStart, phaseDegrees) - dcVolts, 0];
       for (let i = 0; i < n; i++) {
         buffer[i] = (buffer[i] ?? 0) - dcVolts;
         cleanBuffer[i] = (cleanBuffer[i] ?? 0) - dcVolts;
       }
-      applyAcHighPass(buffer, windowSeconds, prevX, prevY);
-      applyAcHighPass(cleanBuffer, windowSeconds, prevX, prevY);
+      applyAcHighPass(buffer, winWidth, prevX, prevY);
+      applyAcHighPass(cleanBuffer, winWidth, prevX, prevY);
       return;
     }
 
@@ -683,30 +805,75 @@ export class OscilloscopeModel implements TModel {
     }
   }
 
-  private computeTriggerOffset(input: ChannelInput, view: TriggerView): number | null {
+  private computeTriggerOffset(input: ChannelInput, view: TriggerView, holdoff: number): number | null {
     const fg = this.functionGenerator;
     const f = fg.frequencyProperty.value;
     if (f <= 0 || !this.isGeneratorInput(input)) {
       return null;
     }
-
     const phaseDeg = this.phaseForInput(input);
-    const { level, rising } = view;
-    const period = 1 / f;
+    return this.computeCrossingOffset((t) => fg.cleanVoltageAt(t, phaseDeg), 1 / f, view.level, view.rising, holdoff);
+  }
 
-    let prev = fg.cleanVoltageAt(0, phaseDeg);
-    for (let i = 1; i <= TRIGGER_SEARCH_STEPS; i++) {
-      const t = (i / TRIGGER_SEARCH_STEPS) * period;
-      const curr = fg.cleanVoltageAt(t, phaseDeg);
+  /**
+   * Finds the sweep origin: the time (within one `period`) at which `sampler`
+   * crosses `level` on the selected edge, refined by linear interpolation.
+   *
+   * Holdoff models a bench scope's trigger holdoff: after an accepted trigger the
+   * comparator ignores crossings for `holdoff` seconds, so the first crossing at
+   * or after `holdoff` (modulo the period) becomes the trigger. On a waveform with
+   * a single edge per cycle this simply skips whole periods and lands on the same
+   * phase — the display is unchanged, exactly as on a real scope with a simple
+   * repetitive signal. On a waveform with several edges per cycle it selects a
+   * later edge, which is what stabilizes the display.
+   *
+   * `sampler` is assumed periodic with `period`, so the search seeds its previous
+   * sample from one step *before* t = 0 (equivalently, `period − dt`). That catches
+   * a crossing sitting exactly on the period boundary — e.g. a sine that starts on
+   * its own rising zero-crossing, whose next rising crossing lands where floating
+   * point makes sin(2π) a hair negative and a t=0-seeded scan would step right past.
+   *
+   * @returns the crossing time in seconds on [0, period), or null when none occurs.
+   */
+  private computeCrossingOffset(
+    sampler: (t: number) => number,
+    period: number,
+    level: number,
+    rising: boolean,
+    holdoff: number,
+  ): number | null {
+    if (!(period > 0)) {
+      return null;
+    }
+    const hold = holdoff > 0 ? holdoff % period : 0;
+    const dt = period / TRIGGER_SEARCH_STEPS;
+    let firstCrossing: number | null = null;
+    let afterHoldoff: number | null = null;
+
+    let prev = sampler(-dt);
+    for (let i = 0; i < TRIGGER_SEARCH_STEPS; i++) {
+      const curr = sampler(i * dt);
       const crossed = rising ? prev < level && curr >= level : prev > level && curr <= level;
       if (crossed) {
         const denom = curr - prev || 1;
         const frac = (level - prev) / denom;
-        return ((i - 1 + frac) / TRIGGER_SEARCH_STEPS) * period;
+        let tc = (i - 1 + frac) * dt;
+        if (tc < 0) {
+          tc += period; // a boundary crossing wraps into [0, period)
+        }
+        if (firstCrossing === null) {
+          firstCrossing = tc;
+        }
+        if (afterHoldoff === null && tc >= hold) {
+          afterHoldoff = tc;
+          break;
+        }
       }
       prev = curr;
     }
-    return null;
+    // Prefer the first post-holdoff crossing; fall back to the first crossing of
+    // all (a full period later it, too, satisfies the holdoff — same phase).
+    return afterHoldoff ?? firstCrossing;
   }
 
   public reset(): void {
@@ -718,8 +885,14 @@ export class OscilloscopeModel implements TModel {
     this.timePerDivisionProperty.reset();
     this.horizontalPositionProperty.reset();
     this.magnifyProperty.reset();
+    this.delayedSweepModeProperty.reset();
+    this.delayProperty.reset();
+    this.delayedTimePerDivisionProperty.reset();
     this.displayModeProperty.reset();
     this.persistenceProperty.reset();
+    this.intensityProperty.reset();
+    this.focusProperty.reset();
+    this.beamFinderProperty.reset();
     this.mathModeProperty.reset();
     this.cursorsEnabledProperty.reset();
     this.cursorTime1Property.reset();
@@ -742,8 +915,14 @@ export class OscilloscopeModel implements TModel {
     this.timePerDivisionProperty.dispose();
     this.horizontalPositionProperty.dispose();
     this.magnifyProperty.dispose();
+    this.delayedSweepModeProperty.dispose();
+    this.delayProperty.dispose();
+    this.delayedTimePerDivisionProperty.dispose();
     this.displayModeProperty.dispose();
     this.persistenceProperty.dispose();
+    this.intensityProperty.dispose();
+    this.focusProperty.dispose();
+    this.beamFinderProperty.dispose();
     this.mathModeProperty.dispose();
     this.cursorsEnabledProperty.dispose();
     this.cursorTime1Property.dispose();

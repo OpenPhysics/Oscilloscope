@@ -159,6 +159,16 @@ const OscilloscopeColors = {
     projector: "#e6e6e6",
   }),
 
+  /**
+   * Translucent band marking the delayed-sweep window on the main trace, drawn in
+   * the "intensified" delayed-sweep mode. Kept the same in both profiles since it
+   * floats over the dark CRT face.
+   */
+  delayZoneColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "delayZone", {
+    default: "rgba(255, 210, 77, 0.18)",
+    projector: "rgba(255, 210, 77, 0.18)",
+  }),
+
   /** On-screen measurement readout text overlaid on the display. */
   displayReadoutColorProperty: new ProfileColorProperty(OscilloscopeNamespace, "displayReadout", {
     default: "#8effc0",

@@ -41,6 +41,25 @@ function extremes(trace: Float32Array): { min: number; max: number } {
   return { min, max };
 }
 
+/** Counts zero-crossings, a proxy for how many waveform cycles are on screen. */
+function signChanges(trace: Float32Array): number {
+  let count = 0;
+  for (let i = 1; i < trace.length; i++) {
+    if (Math.sign(trace[i] ?? 0) !== Math.sign(trace[i - 1] ?? 0)) {
+      count++;
+    }
+  }
+  return count;
+}
+
+/** True when one more refresh (after `mutate`) changed the captured sweep. */
+function sweepAdvanced(model: OscilloscopeModel, mutate: () => void): boolean {
+  const before = Array.from(model.ch1CleanTrace);
+  mutate();
+  model.refresh();
+  return before.some((v, i) => Math.abs(v - (model.ch1CleanTrace[i] ?? 0)) > 1e-6);
+}
+
 describe("OscilloscopeModel", () => {
   it("defaults to CH1 patched to function-generator A, with CH2 unpatched and off", () => {
     const model = new OscilloscopeModel();
@@ -661,6 +680,129 @@ describe("OscilloscopeModel", () => {
     });
   });
 
+  describe("trigger sources", () => {
+    it("LINE triggers independently of the channels", () => {
+      // A grounded CH1 offers no trigger, but LINE fires on the internal mains
+      // reference regardless, so a NORMAL sweep stays live.
+      const model = new OscilloscopeModel();
+      model.functionGenerator.frequencyProperty.value = 200;
+      model.trigger.sourceProperty.value = "line";
+      model.trigger.modeProperty.value = "normal";
+      model.ch1.couplingProperty.value = "GND";
+      model.refresh();
+      expect(
+        sweepAdvanced(model, () => {
+          model.ch1.couplingProperty.value = "DC";
+          model.functionGenerator.amplitudeProperty.value = 3;
+        }),
+      ).toBe(true);
+      model.dispose();
+    });
+
+    it("EXT triggers on the generator output as an external sync", () => {
+      const model = new OscilloscopeModel();
+      const fg = model.functionGenerator;
+      fg.waveformProperty.value = "sine";
+      fg.frequencyProperty.value = 200;
+      fg.amplitudeProperty.value = 1;
+      model.trigger.sourceProperty.value = "ext";
+      model.trigger.levelProperty.value = 0;
+      model.trigger.modeProperty.value = "normal";
+      model.refresh();
+      expect(
+        sweepAdvanced(model, () => {
+          fg.frequencyProperty.value = 350;
+        }),
+      ).toBe(true);
+      model.dispose();
+    });
+  });
+
+  describe("trigger holdoff", () => {
+    it("leaves a simple repetitive trigger stationary and centered", () => {
+      // On a single-edge-per-cycle waveform, holdoff only skips whole periods and
+      // lands on the same phase — the display is unchanged, as on a real scope.
+      const model = new OscilloscopeModel();
+      const fg = model.functionGenerator;
+      fg.waveformProperty.value = "sine";
+      fg.amplitudeProperty.value = 1;
+      fg.frequencyProperty.value = 200;
+      model.trigger.sourceProperty.value = "ch1";
+      model.trigger.levelProperty.value = 0;
+      model.trigger.slopeProperty.value = "rising";
+
+      const captureCenter = (): Float32Array => {
+        model.refresh();
+        return model.ch1CleanTrace.slice();
+      };
+      const withoutHoldoff = captureCenter();
+      model.trigger.holdoffProperty.value = 0.003; // 3 ms, within the 5 ms period
+      const withHoldoff = captureCenter();
+
+      const center = Math.round((withHoldoff.length - 1) / 2);
+      expect(Math.abs(withHoldoff[center] ?? 0)).toBeLessThan(0.05);
+      expect(withHoldoff[center + 5] ?? 0).toBeGreaterThan(withHoldoff[center] ?? 0);
+      // Identical to the no-holdoff capture: a single-edge signal is unaffected.
+      expect(Array.from(withHoldoff)).toEqual(Array.from(withoutHoldoff));
+      model.dispose();
+    });
+  });
+
+  describe("delayed sweep", () => {
+    it("exposes the delayed window as the displayed timebase only in delayed mode", () => {
+      const model = new OscilloscopeModel();
+      model.timePerDivisionProperty.value = 0.001;
+      model.delayedTimePerDivisionProperty.value = 0.0001;
+
+      expect(model.delayedActive).toBe(false);
+      expect(model.displayedTimeWindow).toBeCloseTo(model.timeWindow);
+
+      model.delayedSweepModeProperty.value = "intensified";
+      expect(model.delayedActive).toBe(false); // the band shows, but the sweep is still main
+
+      model.delayedSweepModeProperty.value = "delayed";
+      expect(model.delayedActive).toBe(true);
+      expect(model.displayedTimeWindow).toBeCloseTo(model.delayedWindow);
+      expect(model.displayedTimePerDivision).toBeCloseTo(0.0001);
+      model.dispose();
+    });
+
+    it("zooms into a shorter slice of the signal", () => {
+      const model = new OscilloscopeModel();
+      const fg = model.functionGenerator;
+      fg.waveformProperty.value = "sine";
+      fg.amplitudeProperty.value = 1;
+      fg.frequencyProperty.value = 1000;
+      model.timePerDivisionProperty.value = 0.001; // main: 10 ms ≈ 10 cycles
+      model.delayedTimePerDivisionProperty.value = 0.0001; // delayed: 1 ms ≈ 1 cycle
+      model.delayProperty.value = 5;
+
+      model.refresh();
+      const mainCycles = signChanges(model.ch1CleanTrace);
+
+      model.delayedSweepModeProperty.value = "delayed";
+      model.refresh();
+      const delayedCycles = signChanges(model.ch1CleanTrace);
+
+      // The delayed sweep shows far fewer cycles (~1/10 of the main window) …
+      expect(delayedCycles).toBeLessThan(mainCycles / 4);
+      // … but it is still the same full-amplitude sine.
+      const { min, max } = extremes(model.ch1CleanTrace);
+      expect(max).toBeGreaterThan(0.9);
+      expect(min).toBeLessThan(-0.9);
+      model.dispose();
+    });
+
+    it("is inert while the microphone is patched", () => {
+      const model = new OscilloscopeModel();
+      model.delayedSweepModeProperty.value = "delayed";
+      expect(model.delayedActive).toBe(true);
+      model.connectJack(1, "microphone");
+      expect(model.delayedActive).toBe(false);
+      model.dispose();
+    });
+  });
+
   it("reset() restores the BNC patches, sensitivities, and generator", () => {
     const model = new OscilloscopeModel();
     model.ch1.inputProperty.value = "microphone";
@@ -668,12 +810,20 @@ describe("OscilloscopeModel", () => {
     model.timePerDivisionProperty.value = 0.01;
     model.ch1.voltsPerDivisionProperty.value = 2;
     model.functionGenerator.frequencyProperty.value = 1000;
+    model.trigger.sourceProperty.value = "line";
+    model.trigger.holdoffProperty.value = 0.01;
+    model.delayedSweepModeProperty.value = "delayed";
+    model.beamFinderProperty.value = true;
     model.reset();
     expect(model.ch1.inputProperty.value).toBe("functionGeneratorA");
     expect(model.ch2.inputProperty.value).toBe("none");
     expect(model.timePerDivisionProperty.value).toBe(0.001);
     expect(model.ch1.voltsPerDivisionProperty.value).toBe(0.5);
     expect(model.functionGenerator.frequencyProperty.value).toBe(FG_DEFAULT_FREQUENCY);
+    expect(model.trigger.sourceProperty.value).toBe("ch1");
+    expect(model.trigger.holdoffProperty.value).toBe(0);
+    expect(model.delayedSweepModeProperty.value).toBe("off");
+    expect(model.beamFinderProperty.value).toBe(false);
     model.dispose();
   });
 });

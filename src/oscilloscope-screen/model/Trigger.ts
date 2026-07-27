@@ -14,10 +14,19 @@
 
 import { BooleanProperty, NumberProperty, StringUnionProperty } from "scenerystack/axon";
 import OscilloscopeNamespace from "../../OscilloscopeNamespace.js";
-import { SCOPE_TRIGGER_LEVEL_RANGE } from "../../SimConstants.js";
+import {
+  SCOPE_DEFAULT_TRIGGER_HOLDOFF,
+  SCOPE_TRIGGER_HOLDOFF_RANGE,
+  SCOPE_TRIGGER_LEVEL_RANGE,
+} from "../../SimConstants.js";
 
-/** Which channel the trigger comparator watches. */
-export const TRIGGER_SOURCES = ["ch1", "ch2"] as const;
+/**
+ * What the trigger comparator watches:
+ *   - `ch1` / `ch2` — the displayed trace of that vertical channel
+ *   - `line`        — an internal AC-mains reference (see {@link LINE_FREQUENCY})
+ *   - `ext`         — the function generator's own output, as an external sync
+ */
+export const TRIGGER_SOURCES = ["ch1", "ch2", "line", "ext"] as const;
 export type TriggerSource = (typeof TRIGGER_SOURCES)[number];
 
 /** Which edge of the signal fires the trigger. */
@@ -51,6 +60,16 @@ export class Trigger {
   });
 
   /**
+   * Holdoff time (seconds): a dead time after each accepted trigger during which
+   * the comparator ignores further crossings. Used to hold a stable display on a
+   * waveform with more than one edge per cycle.
+   */
+  public readonly holdoffProperty = new NumberProperty(SCOPE_DEFAULT_TRIGGER_HOLDOFF, {
+    range: SCOPE_TRIGGER_HOLDOFF_RANGE,
+    units: "s",
+  });
+
+  /**
    * Whether a `single` sweep is armed and still waiting for its trigger event.
    * Only meaningful in `single` mode: the model clears it (and stops the sweep)
    * as soon as one triggered capture completes, exactly like a bench scope's
@@ -68,6 +87,7 @@ export class Trigger {
     this.levelProperty.reset();
     this.slopeProperty.reset();
     this.modeProperty.reset();
+    this.holdoffProperty.reset();
     this.armedProperty.reset();
   }
 
@@ -76,6 +96,7 @@ export class Trigger {
     this.levelProperty.dispose();
     this.slopeProperty.dispose();
     this.modeProperty.dispose();
+    this.holdoffProperty.dispose();
     this.armedProperty.dispose();
   }
 }

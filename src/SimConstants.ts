@@ -121,8 +121,46 @@ export const SCOPE_HORIZONTAL_POSITION_RANGE = new Range(-HORIZONTAL_DIVISIONS /
 /** Trigger level, in volts. Kept wide so it stays reachable at any volts/div. */
 export const SCOPE_TRIGGER_LEVEL_RANGE = new Range(-20, 20); // V
 
+/**
+ * Frequency of the internal AC-line ("mains") reference used by the `line` trigger
+ * source, in hertz. Selecting LINE triggers the sweep on this fixed reference, so a
+ * signal harmonically related to the mains stands still while an unrelated one rolls —
+ * exactly how a bench scope's line trigger is used to look at hum.
+ */
+export const LINE_FREQUENCY = 60; // Hz
+
+/**
+ * Trigger holdoff, in seconds: a dead time after each accepted trigger during which
+ * further triggers are ignored, used to stabilize waveforms with more than one edge
+ * per cycle. Default 0 (disabled).
+ */
+export const SCOPE_TRIGGER_HOLDOFF_RANGE = new Range(0, 0.05); // s
+export const SCOPE_DEFAULT_TRIGGER_HOLDOFF = 0; // s
+
 /** Extra sweep magnification applied when the ×10 (zoom) button is engaged. */
 export const SCOPE_MAGNIFY_FACTOR = 10;
+
+// ── Delayed sweep (second timebase) ───────────────────────────────────────────
+// A delayed sweep magnifies a small, delayed slice of the main sweep. The delay
+// marker sits on the main trace (measured in main-sweep divisions from the left
+// edge); the delayed time/div sets how far the slice is zoomed.
+
+/** Default delayed time/div (a fast slice of the main sweep). */
+export const SCOPE_DEFAULT_DELAYED_TIME_PER_DIV = 0.00005; // s/div (50 µs/div)
+
+/** Position of the delay marker on the main sweep, in divisions from the left edge. */
+export const SCOPE_DELAY_RANGE = new Range(0, HORIZONTAL_DIVISIONS); // div
+export const SCOPE_DEFAULT_DELAY = HORIZONTAL_DIVISIONS / 2; // div (centered on the trigger)
+
+// ── CRT beam controls (intensity / focus) ─────────────────────────────────────
+
+/** Trace brightness: 1 is full phosphor glow, lower dims the whole trace layer. */
+export const SCOPE_INTENSITY_RANGE = new Range(0.2, 1);
+export const SCOPE_DEFAULT_INTENSITY = 0.9;
+
+/** Beam focus: 1 is a sharp hairline; lower values thicken (defocus) the trace. */
+export const SCOPE_FOCUS_RANGE = new Range(0, 1);
+export const SCOPE_DEFAULT_FOCUS = 1;
 
 /**
  * Probe attenuation factors offered on each channel's probe switch (×1 / ×10).

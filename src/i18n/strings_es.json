@@ -55,7 +55,13 @@
     "position": "Posición",
     "magnify": "×10 Amp",
     "xyMode": "X-Y",
-    "fft": "FFT"
+    "fft": "FFT",
+    "delayedMode": "Barrido retard.",
+    "delayedOff": "Apag.",
+    "delayedIntensified": "Princ.",
+    "delayedDelayed": "Retard.",
+    "delay": "Retardo",
+    "delayedScale": "Esc. retardo"
   },
   "trigger": {
     "title": "Disparo",
@@ -65,11 +71,20 @@
     "mode": "Modo",
     "ch1": "CH1",
     "ch2": "CH2",
+    "line": "Red",
+    "ext": "Ext",
     "rising": "Subida",
     "falling": "Bajada",
     "auto": "Auto",
     "normal": "Normal",
-    "single": "Único"
+    "single": "Único",
+    "holdoff": "Retención"
+  },
+  "display": {
+    "title": "Pantalla",
+    "intensity": "Intensidad",
+    "focus": "Enfoque",
+    "beamFind": "Buscar haz"
   },
   "acquisition": {
     "title": "Adquirir",
@@ -156,6 +171,9 @@
       "timePerDivision": "Tiempo por división",
       "horizontalPosition": "Posición horizontal",
       "magnify": "Amplificador horizontal diez veces",
+      "delayedSweep": "Modo de barrido retardado",
+      "delayPosition": "Posición del retardo",
+      "delayedTimePerDivision": "Tiempo por división retardado",
       "xyMode": "Modo de pantalla X-Y",
       "fft": "Pantalla de espectro FFT",
       "cursors": "Alternar los cursores de medición",
@@ -172,10 +190,14 @@
       "triggerLevel": "Nivel de disparo",
       "triggerSlope": "Pendiente de disparo",
       "triggerMode": "Modo de disparo",
+      "triggerHoldoff": "Tiempo de retención del disparo",
       "runStop": "Iniciar o detener la adquisición",
       "single": "Captura de disparo único",
       "autoset": "Autoajustar la pantalla a la señal",
       "persistence": "Persistencia de la forma de onda",
+      "intensity": "Intensidad de la traza",
+      "focus": "Enfoque de la traza",
+      "beamFind": "Buscar haz",
       "math": "Canal matemático",
       "fgOutA": "Salida A del generador de funciones",
       "fgOutB": "Salida B del generador de funciones",

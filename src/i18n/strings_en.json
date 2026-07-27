@@ -55,7 +55,13 @@
     "position": "Position",
     "magnify": "×10 Mag",
     "xyMode": "X-Y",
-    "fft": "FFT"
+    "fft": "FFT",
+    "delayedMode": "Dly'd Sweep",
+    "delayedOff": "Off",
+    "delayedIntensified": "Main",
+    "delayedDelayed": "Dly'd",
+    "delay": "Delay",
+    "delayedScale": "Dly Scale"
   },
   "trigger": {
     "title": "Trigger",
@@ -65,11 +71,20 @@
     "mode": "Mode",
     "ch1": "CH1",
     "ch2": "CH2",
+    "line": "Line",
+    "ext": "Ext",
     "rising": "Rising",
     "falling": "Falling",
     "auto": "Auto",
     "normal": "Normal",
-    "single": "Single"
+    "single": "Single",
+    "holdoff": "Holdoff"
+  },
+  "display": {
+    "title": "Display",
+    "intensity": "Intensity",
+    "focus": "Focus",
+    "beamFind": "Beam Find"
   },
   "acquisition": {
     "title": "Acquire",
@@ -156,6 +171,9 @@
       "timePerDivision": "Time per division",
       "horizontalPosition": "Horizontal position",
       "magnify": "Ten times horizontal magnifier",
+      "delayedSweep": "Delayed sweep mode",
+      "delayPosition": "Delay position",
+      "delayedTimePerDivision": "Delayed time per division",
       "xyMode": "X-Y display mode",
       "fft": "FFT spectrum display",
       "cursors": "Toggle measurement cursors",
@@ -172,10 +190,14 @@
       "triggerLevel": "Trigger level",
       "triggerSlope": "Trigger slope",
       "triggerMode": "Trigger mode",
+      "triggerHoldoff": "Trigger holdoff time",
       "runStop": "Run or stop acquisition",
       "single": "Single-shot capture",
       "autoset": "Autoset the display to the signal",
       "persistence": "Waveform persistence",
+      "intensity": "Trace intensity",
+      "focus": "Trace focus",
+      "beamFind": "Beam find",
       "math": "Math channel",
       "fgOutA": "Function generator output A",
       "fgOutB": "Function generator output B",

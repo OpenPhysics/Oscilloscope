@@ -13,9 +13,10 @@ import { RotarySwitch } from "../../common/controls/RotarySwitch.js";
 import { DisposalBag } from "../../common/DisposalBag.js";
 import { SimPanel } from "../../common/SimPanel.js";
 import { StringManager } from "../../i18n/StringManager.js";
-import { SCOPE_HORIZONTAL_POSITION_RANGE, SCOPE_TIME_PER_DIV_STEPS } from "../../SimConstants.js";
+import { SCOPE_DELAY_RANGE, SCOPE_HORIZONTAL_POSITION_RANGE, SCOPE_TIME_PER_DIV_STEPS } from "../../SimConstants.js";
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
-import { derivedString, numberItems } from "./controlHelpers.js";
+import { DELAYED_SWEEP_MODES } from "../model/OscilloscopeModel.js";
+import { derivedString, numberItems, unionItems } from "./controlHelpers.js";
 import { formatDivisions, formatTimePerDiv } from "./formatUnits.js";
 import { withSectionHeader } from "./panelSection.js";
 
@@ -71,21 +72,74 @@ export class HorizontalControlPanel extends SimPanel {
       fontSize: 11,
     });
 
+    // ── Delayed sweep (second timebase) ───────────────────────────────────────
+    const delayedModeSwitch = new RotarySwitch(
+      model.delayedSweepModeProperty,
+      unionItems(DELAYED_SWEEP_MODES, {
+        off: h.delayedOffStringProperty,
+        intensified: h.delayedIntensifiedStringProperty,
+        delayed: h.delayedDelayedStringProperty,
+      }),
+      {
+        radius: 16,
+        captionStringProperty: h.delayedModeStringProperty,
+        accessibleName: a11y.delayedSweepStringProperty,
+      },
+    );
+
+    const delayReadoutProperty = derivedString(model.delayProperty, formatDivisions);
+    const delayKnob = new RotaryKnob(model.delayProperty, SCOPE_DELAY_RANGE, {
+      radius: 16,
+      captionStringProperty: h.delayStringProperty,
+      valueStringProperty: delayReadoutProperty,
+      accessibleName: a11y.delayPositionStringProperty,
+    });
+
+    const delayedTimeSwitch = new RotarySwitch(
+      model.delayedTimePerDivisionProperty,
+      numberItems(SCOPE_TIME_PER_DIV_STEPS, formatTimePerDiv),
+      {
+        radius: 18,
+        captionStringProperty: h.delayedScaleStringProperty,
+        accessibleName: a11y.delayedTimePerDivisionStringProperty,
+      },
+    );
+
     const body = new VBox({
       align: "left",
       spacing: 8,
       children: [
         new HBox({ spacing: 12, align: "top", children: [positionKnob, timeSwitch] }),
         new HBox({ spacing: 8, children: [magButton, xyButton] }),
+        new HBox({ spacing: 10, align: "top", children: [delayedModeSwitch, delayKnob, delayedTimeSwitch] }),
       ],
     });
 
     super(withSectionHeader(h.titleStringProperty, body, { bag }), { xMargin: 10, yMargin: 8 });
 
     this.bag = bag;
-    this.bag.own(positionKnob, timeSwitch, magButton, xyButton, positionReadoutProperty, xyActiveProperty);
+    this.bag.own(
+      positionKnob,
+      timeSwitch,
+      magButton,
+      xyButton,
+      delayedModeSwitch,
+      delayKnob,
+      delayedTimeSwitch,
+      positionReadoutProperty,
+      xyActiveProperty,
+      delayReadoutProperty,
+    );
 
-    this.controlsInOrder = [positionKnob, timeSwitch, magButton, xyButton];
+    this.controlsInOrder = [
+      positionKnob,
+      timeSwitch,
+      magButton,
+      xyButton,
+      delayedModeSwitch,
+      delayKnob,
+      delayedTimeSwitch,
+    ];
   }
 
   public override dispose(): void {
