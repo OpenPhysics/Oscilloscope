@@ -166,7 +166,6 @@ that constraint directly so the override does not come back.
 | `src/common/SimButtonOptions.ts` | Flat button-appearance option bundles + light-control-surface combo-box options |
 | `src/common/TimeModel.ts` | Composable play/pause model — drives Run/Stop |
 | `scripts/generate-icons.ts` | PNG icons from `public/icons/icon.svg` |
-| `scripts/rename-sim.ts` | Automated fork/rename across all files and folders |
 
 ## Common components
 
@@ -252,11 +251,11 @@ Sim-specific notes:
 
 Baton's compliance check passes. One documented deviation:
 
-- **`TRANSPARENT_HIT_FILL` in `MeasurementCursorNode.ts`** is a hardcoded `rgba(0, 0, 0, 0.01)`
-  rather than a `ProfileColorProperty`. It is a pointer hit-area affordance, not a themed color —
-  it must stay invisible in every color profile, so routing it through `OscilloscopeColors.ts`
-  would be misleading. The compliance script flags it as a possible hardcoded color; that warning
-  is expected.
+- **Hardcoded colors:** `TRANSPARENT_HIT_FILL` in `MeasurementCursorNode.ts` is a hardcoded
+  `rgba(0, 0, 0, 0.01)` rather than a `ProfileColorProperty`. It is a pointer hit-area affordance,
+  not a themed color — it must stay invisible in every color profile, so routing it through
+  `OscilloscopeColors.ts` would be misleading. The compliance script flags it as a possible
+  hardcoded-colors hit; that warning is expected.
 
 ## Testing
 
@@ -274,7 +273,6 @@ Fleet-standard Vitest layout (keep when forking):
 | `playwright.config.ts` | Chromium project + Vite webServer for fuzz |
 
 - Put unit tests only under root `tests/`, mirroring `src/` (never co-locate or use `__tests__/`).
-- Change the `name` passed to `init()` in `tests/setup.ts` to match `package.json` after `npm run rename`.
 - Run `npm test`. CI runs the suite when a `test` script is present.
 - Expand `memory-leak.test.ts` for any component that adds/removes nodes or links Properties at
   runtime (see OpticsLab for a deep suite). The view cases construct their component against a model
@@ -309,27 +307,6 @@ npm run lint && npm run check && npm run build && npm test
 | `npm run test:fuzz` | Playwright fuzz smoke |
 | `npm run test:fuzz:quick` | 10s fuzz |
 | `npm run icons` | Regenerate PWA icons |
-| `npm run rename` | Automated fork/rename (`--id`, `--name`) |
-
-## Customizing a new sim from this template
-
-### Automated rename (recommended)
-
-```sh
-npm run rename -- --id friction --name "Friction"
-# or for multi-word names:
-npm run rename -- --id wave-interference --name "Wave Interference"
-```
-
-This replaces all template identifiers in file contents and renames files/folders. Run
-`npm run check` afterwards to verify TypeScript is clean.
-
-### Manual checklist (if not using the rename script)
-
-1. **Rename** — replace `oscilloscope` / `Oscilloscope` / `Sim` prefix in `init.ts`, `brand.ts`, `package.json`, class names, and screen folders
-2. **Locale** — add `strings_XX.json`, register in `StringManager`, add locale to `init.ts` `availableLocales`
-3. **Icon** — edit `public/icons/icon.svg`, run `npm run icons`; match theme color in `index.html` / `vite.config.ts`
-4. **Colors** — edit `OscilloscopeColors.ts` (`default` + `projector` profiles per property)
 
 ## Multi-screen sims
 
@@ -342,18 +319,6 @@ Summary:
 - For shared state, create a root model passed to each per-screen model
 - Add `src/common/{SimName}ScreenIcons.ts` with `create{Screen}Icon()` factories; wire `homeScreenIcon` + `navigationBarIcon` on each Screen
 - Register all screens in the `screens` array in `main.ts`
-
-## Using this template beyond a direct copy
-
-| Approach | When to use |
-|---|---|
-| **GitHub template** ("Use this template" button) | Starting a single new sim |
-| `npm run rename` after cloning | Same, automated |
-| **npm workspace / monorepo** | Managing a suite of sims with shared tooling |
-| **`npm create` scaffolder** | Org-wide standardized sim bootstrapping |
-| **git subtree** for pulling updates | Keeping forks in sync with template improvements |
-
-See `doc/multi-screen.md` → "Using this template beyond a direct copy" for details on each approach.
 
 ## PWA
 
