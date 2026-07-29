@@ -154,8 +154,8 @@ export default defineConfig(({ mode }) => {
             manifest: {
               name: "Oscilloscope",
               // biome-ignore lint/style/useNamingConvention: Web App Manifest spec requires snake_case keys
-              short_name: "SimTemplate",
-              description: "A single-screen SceneryStack simulation template",
+              short_name: "Oscilloscope",
+              description: "A bench oscilloscope for synthetic function-generator signals or live microphone audio",
               // biome-ignore lint/style/useNamingConvention: Web App Manifest spec requires snake_case keys
               theme_color: "#1a1a2e",
               // biome-ignore lint/style/useNamingConvention: Web App Manifest spec requires snake_case keys
