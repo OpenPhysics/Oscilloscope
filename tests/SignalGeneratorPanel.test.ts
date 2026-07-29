@@ -8,8 +8,8 @@ import { enableAssert } from "scenerystack/assert";
 import { NumberProperty } from "scenerystack/axon";
 import { beforeAll, describe, expect, it } from "vitest";
 import { DisposalBag } from "../src/common/DisposalBag.js";
+import { FG_FREQUENCY_RANGE } from "../src/OscilloscopeConstants.js";
 import { createLog10Property } from "../src/oscilloscope-screen/view/SignalGeneratorPanel.js";
-import { FG_FREQUENCY_RANGE } from "../src/SimConstants.js";
 
 describe("createLog10Property", () => {
   beforeAll(() => {

@@ -65,7 +65,10 @@ export function formatDivisions(divisions: number): string {
   return `${toFixed(divisions, 2)} div`;
 }
 
-/** Trigger holdoff readout: "Off" at zero, otherwise a time (µs / ms). */
-export function formatHoldoff(seconds: number): string {
-  return seconds <= 0 ? "Off" : formatPeriod(seconds);
+/**
+ * Trigger holdoff readout: the localized `offLabel` at zero, otherwise a time (µs / ms).
+ * Callers must pass a locale string (e.g. `trigger.holdoffOff`) — never hardcode English.
+ */
+export function formatHoldoff(seconds: number, offLabel: string): string {
+  return seconds <= 0 ? offLabel : formatPeriod(seconds);
 }

@@ -5,8 +5,8 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { AUDIO_FFT_SIZE, TRACE_SAMPLE_COUNT } from "../src/OscilloscopeConstants.js";
 import { AudioInput } from "../src/oscilloscope-screen/model/AudioInput.js";
-import { AUDIO_FFT_SIZE, TRACE_SAMPLE_COUNT } from "../src/SimConstants.js";
 
 const SAMPLE_RATE = 44100;
 

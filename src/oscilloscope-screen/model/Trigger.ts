@@ -13,12 +13,12 @@
  */
 
 import { BooleanProperty, NumberProperty, StringUnionProperty } from "scenerystack/axon";
-import OscilloscopeNamespace from "../../OscilloscopeNamespace.js";
 import {
   SCOPE_DEFAULT_TRIGGER_HOLDOFF,
   SCOPE_TRIGGER_HOLDOFF_RANGE,
   SCOPE_TRIGGER_LEVEL_RANGE,
-} from "../../SimConstants.js";
+} from "../../OscilloscopeConstants.js";
+import OscilloscopeNamespace from "../../OscilloscopeNamespace.js";
 
 /**
  * What the trigger comparator watches:

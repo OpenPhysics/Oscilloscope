@@ -1,5 +1,5 @@
 /**
- * SimConstants.ts
+ * OscilloscopeConstants.ts
  *
  * Central repository for every named numeric constant used across the
  * simulation. Bare numbers that carry semantic meaning (sizes, margins,
@@ -224,7 +224,7 @@ export const CURSOR_VOLT_RANGE = new Range(-VERTICAL_DIVISIONS / 2, VERTICAL_DIV
  */
 export const AUDIO_FFT_SIZE = 32768;
 
-OscilloscopeNamespace.register("SimConstants", {
+OscilloscopeNamespace.register("OscilloscopeConstants", {
   SCREEN_VIEW_MARGIN,
   PANEL_CORNER_RADIUS,
   HORIZONTAL_DIVISIONS,

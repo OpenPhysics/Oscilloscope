@@ -6,7 +6,7 @@
  * switch (auto / normal / single).
  */
 
-import { DerivedProperty } from "scenerystack/axon";
+import { DerivedProperty, PatternStringProperty } from "scenerystack/axon";
 import { HBox, type Node, VBox } from "scenerystack/scenery";
 import { PanelButton } from "../../common/controls/PanelButton.js";
 import { RotaryKnob } from "../../common/controls/RotaryKnob.js";
@@ -14,7 +14,7 @@ import { RotarySwitch } from "../../common/controls/RotarySwitch.js";
 import { DisposalBag } from "../../common/DisposalBag.js";
 import { SimPanel } from "../../common/SimPanel.js";
 import { StringManager } from "../../i18n/StringManager.js";
-import { SCOPE_TRIGGER_HOLDOFF_RANGE, SCOPE_TRIGGER_LEVEL_RANGE } from "../../SimConstants.js";
+import { SCOPE_TRIGGER_HOLDOFF_RANGE, SCOPE_TRIGGER_LEVEL_RANGE } from "../../OscilloscopeConstants.js";
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
 import { TRIGGER_MODES, TRIGGER_SOURCES } from "../model/Trigger.js";
 import { derivedString, unionItems } from "./controlHelpers.js";
@@ -58,10 +58,14 @@ export class TriggerControlPanel extends SimPanel {
     // Every string this label interpolates has to be a dependency, including the
     // "Slope" caption itself — reading it as `.value` inside the derivation would
     // leave the caption stale in the old locale after a runtime language switch.
-    const slopeLabelProperty = new DerivedProperty(
-      [trigger.slopeProperty, t.slopeStringProperty, t.risingStringProperty, t.fallingStringProperty],
-      (slope, slopeLabel, rising, falling) => `${slopeLabel}: ${slope === "rising" ? rising : falling}`,
+    const slopeDirectionProperty = new DerivedProperty(
+      [trigger.slopeProperty, t.risingStringProperty, t.fallingStringProperty],
+      (slope, rising, falling) => (slope === "rising" ? rising : falling),
     );
+    const slopeLabelProperty = new PatternStringProperty(t.slopeLabelStringProperty, {
+      slope: t.slopeStringProperty,
+      direction: slopeDirectionProperty,
+    });
     const slopeButton = new PanelButton({
       labelStringProperty: slopeLabelProperty,
       accessibleName: a11y.triggerSlopeStringProperty,
@@ -81,7 +85,10 @@ export class TriggerControlPanel extends SimPanel {
       { radius: 20, captionStringProperty: t.modeStringProperty, accessibleName: a11y.triggerModeStringProperty },
     );
 
-    const holdoffReadoutProperty = derivedString(trigger.holdoffProperty, formatHoldoff);
+    const holdoffReadoutProperty = new DerivedProperty(
+      [trigger.holdoffProperty, t.holdoffOffStringProperty],
+      (seconds, offLabel) => formatHoldoff(seconds, offLabel),
+    );
     const holdoffKnob = new RotaryKnob(trigger.holdoffProperty, SCOPE_TRIGGER_HOLDOFF_RANGE, {
       radius: 18,
       captionStringProperty: t.holdoffStringProperty,
@@ -108,6 +115,7 @@ export class TriggerControlPanel extends SimPanel {
       modeSwitch,
       holdoffKnob,
       slopeLabelProperty,
+      slopeDirectionProperty,
       levelReadoutProperty,
       holdoffReadoutProperty,
     );

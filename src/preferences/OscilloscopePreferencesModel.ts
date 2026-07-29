@@ -8,8 +8,8 @@
 
 import { BooleanProperty, NumberProperty } from "scenerystack/axon";
 import type { Tandem } from "scenerystack/tandem";
+import { FG_NOISE_AMPLITUDE_RANGE } from "../OscilloscopeConstants.js";
 import OscilloscopeNamespace from "../OscilloscopeNamespace.js";
-import { FG_NOISE_AMPLITUDE_RANGE } from "../SimConstants.js";
 import oscilloscopeQueryParameters from "./oscilloscopeQueryParameters.js";
 
 export class OscilloscopePreferencesModel {

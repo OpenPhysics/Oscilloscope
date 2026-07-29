@@ -28,7 +28,7 @@ import {
   FG_FREQUENCY_RANGE,
   FG_OFFSET_RANGE,
   FG_PHASE_RANGE,
-} from "../../SimConstants.js";
+} from "../../OscilloscopeConstants.js";
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
 import { WAVEFORMS } from "../model/Waveform.js";
 import { derivedString } from "./controlHelpers.js";

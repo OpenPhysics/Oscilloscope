@@ -13,7 +13,7 @@ import { Node, Rectangle, Text, type TPaint, VBox } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
 import type { DisposalBag } from "../../common/DisposalBag.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
-import { PANEL_CORNER_RADIUS } from "../../SimConstants.js";
+import { PANEL_CORNER_RADIUS } from "../../OscilloscopeConstants.js";
 
 const HEADER_FONT = new PhetFont({ size: 13, weight: "bold" });
 /** Height of the header strip, in screen pixels. */

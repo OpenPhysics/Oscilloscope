@@ -24,7 +24,7 @@ import {
   READOUT_ROW_SPACING,
   READOUT_X_PADDING,
   READOUT_Y_PADDING,
-} from "../../SimConstants.js";
+} from "../../OscilloscopeConstants.js";
 import { formatDegrees, formatFrequency, formatPercent, formatPeriod, formatVoltage } from "./formatUnits.js";
 
 const READOUT_FONT = new PhetFont(READOUT_FONT_SIZE);

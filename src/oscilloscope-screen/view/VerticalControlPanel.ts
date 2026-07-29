@@ -6,7 +6,7 @@
  * along the bottom.
  */
 
-import { DerivedProperty, type TReadOnlyProperty } from "scenerystack/axon";
+import { DerivedProperty, PatternStringProperty, type TReadOnlyProperty } from "scenerystack/axon";
 import { HBox, type Node, Text, type TPaint, VBox } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
 import { PanelButton } from "../../common/controls/PanelButton.js";
@@ -16,7 +16,7 @@ import { DisposalBag } from "../../common/DisposalBag.js";
 import { SimPanel } from "../../common/SimPanel.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
-import { SCOPE_POSITION_RANGE, SCOPE_PROBE_FACTORS, SCOPE_VOLTS_PER_DIV_STEPS } from "../../SimConstants.js";
+import { SCOPE_POSITION_RANGE, SCOPE_PROBE_FACTORS, SCOPE_VOLTS_PER_DIV_STEPS } from "../../OscilloscopeConstants.js";
 import type { Channel } from "../model/Channel.js";
 import { COUPLINGS } from "../model/Coupling.js";
 import { MATH_MODES, type OscilloscopeModel } from "../model/OscilloscopeModel.js";
@@ -82,24 +82,22 @@ export class VerticalControlPanel extends SimPanel {
       },
     );
 
-    const mathLabelProperty = new DerivedProperty(
-      [
-        model.mathModeProperty,
-        acq.mathStringProperty,
-        acq.mathOffStringProperty,
-        acq.mathAddStringProperty,
-        acq.mathSubtractStringProperty,
-      ],
-      (mode, math, off, add, subtract) => {
+    const mathModeNameProperty = new DerivedProperty(
+      [model.mathModeProperty, acq.mathOffStringProperty, acq.mathAddStringProperty, acq.mathSubtractStringProperty],
+      (mode, off, add, subtract) => {
         if (mode === "add") {
-          return `${math}: ${add}`;
+          return add;
         }
         if (mode === "subtract") {
-          return `${math}: ${subtract}`;
+          return subtract;
         }
-        return `${math}: ${off}`;
+        return off;
       },
     );
+    const mathLabelProperty = new PatternStringProperty(acq.mathModeLabelStringProperty, {
+      math: acq.mathStringProperty,
+      mode: mathModeNameProperty,
+    });
     const mathActiveProperty = new DerivedProperty([model.mathModeProperty], (mode) => mode !== "off");
     const mathButton = new PanelButton({
       labelStringProperty: mathLabelProperty,
@@ -154,7 +152,16 @@ export class VerticalControlPanel extends SimPanel {
 
     this.bag = bag;
     // The BNC jacks belong to the patch layer, which disposes them itself.
-    this.bag.own(column1, column2, mathButton, fftButton, mathLabelProperty, mathActiveProperty, fftActiveProperty);
+    this.bag.own(
+      column1,
+      column2,
+      mathButton,
+      fftButton,
+      mathLabelProperty,
+      mathModeNameProperty,
+      mathActiveProperty,
+      fftActiveProperty,
+    );
   }
 
   public override dispose(): void {

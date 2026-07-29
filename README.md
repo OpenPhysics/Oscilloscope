@@ -7,14 +7,21 @@ TypeScript 7, and Biome 2.
 
 ## Features
 
-- **CRT display** — 10 × 8 graticule with center cross-hair, subdivision ticks, and a glowing trace
-- **Function generator** — sine / square / triangle / sawtooth, adjustable frequency (20–2000 Hz)
-  and amplitude (0–2.5 V)
-- **Microphone source** — displays the live audio waveform via the Web Audio API (with graceful
-  fallback when unavailable or permission is denied)
-- **Scope controls** — 1-2-5 stepped volts/div and time/div pickers, plus Run/Stop and single-step
-- **On-screen measurements** — live frequency, period, and peak-to-peak voltage readout
-  (toggle in Preferences → Simulation)
+- **CRT display** — 10 × 8 graticule, dual-channel traces, CRT intensity / focus / beam find,
+  optional persistence afterglow
+- **Function generator** — sine / square / triangle / sawtooth / pulse / noise with amplitude,
+  DC offset, duty cycle, and OUT B phase; patched to CH1/CH2 over BNC cables
+- **Microphone source** — live audio via the Web Audio API (graceful fallback when unavailable
+  or permission is denied)
+- **Vertical** — CH1 / CH2 volts/div, position, AC-DC-GND coupling, invert, probe ×1/×10, on/off,
+  plus CH1±CH2 math
+- **Horizontal** — time/div, position, ×10 magnify, delayed sweep (off / intensified / delayed),
+  Y-T / X-Y / FFT display modes
+- **Trigger** — source CH1/CH2/LINE/EXT, level (draggable marker), slope, auto/normal/single,
+  holdoff; Run/Stop, Single, Autoset
+- **Measurements** — live freq / period / Vpp / Vrms / Vmax / Vmin / duty / rise / fall / mean /
+  phase, plus draggable Δt / 1÷Δt / ΔV cursors (toggle in Preferences → Simulation)
+- **Lab & export** — guided lab presets, CSV / PNG export
 - Full Interactive Description accessibility (screen summary, live details, PDOM order, keyboard help)
 - English, Spanish, and French localization via `StringManager`
 - Default and projector color profiles

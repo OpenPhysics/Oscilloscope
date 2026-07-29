@@ -17,13 +17,13 @@
  */
 
 import { BooleanProperty, NumberProperty, StringUnionProperty } from "scenerystack/axon";
-import OscilloscopeNamespace from "../../OscilloscopeNamespace.js";
 import {
   type ProbeFactor,
   SCOPE_POSITION_RANGE,
   SCOPE_PROBE_FACTORS,
   SCOPE_VOLTS_PER_DIV_RANGE,
-} from "../../SimConstants.js";
+} from "../../OscilloscopeConstants.js";
+import OscilloscopeNamespace from "../../OscilloscopeNamespace.js";
 import { CHANNEL_INPUTS, type ChannelInput } from "./ChannelInput.js";
 import { COUPLINGS, type Coupling } from "./Coupling.js";
 

@@ -50,7 +50,6 @@
     "@playwright/test": "^1.62.0",
     "@types/node": "^24.13.3",
     "happy-dom": "^20.11.1",
-    "jsdom": "^30.0.0",
     "playwright": "^1.61.1",
     "png-to-ico": "^3.0.2",
     "sharp": "^0.35.3",

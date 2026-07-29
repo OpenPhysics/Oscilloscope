@@ -6,8 +6,8 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { FG_DEFAULT_FREQUENCY } from "../src/OscilloscopeConstants.js";
 import { FunctionGenerator } from "../src/oscilloscope-screen/model/FunctionGenerator.js";
-import { FG_DEFAULT_FREQUENCY } from "../src/SimConstants.js";
 
 describe("FunctionGenerator", () => {
   it("defaults to a sine wave at the default frequency, amplitude 1 V", () => {

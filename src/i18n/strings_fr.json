@@ -78,7 +78,9 @@
     "auto": "Auto",
     "normal": "Normal",
     "single": "Unique",
-    "holdoff": "Inhibition"
+    "holdoff": "Inhibition",
+    "holdoffOff": "Arrêt",
+    "slopeLabel": "{{slope}} : {{direction}}"
   },
   "display": {
     "title": "Affichage",
@@ -102,6 +104,7 @@
     "mathOff": "Non",
     "mathAdd": "CH1 + CH2",
     "mathSubtract": "CH1 − CH2",
+    "mathModeLabel": "{{math}} : {{mode}}",
     "fft": "F"
   },
   "measurements": {

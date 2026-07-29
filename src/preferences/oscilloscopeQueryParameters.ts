@@ -16,8 +16,8 @@
 
 import { logGlobal } from "scenerystack/phet-core";
 import { QueryStringMachine } from "scenerystack/query-string-machine";
+import { FG_DEFAULT_NOISE_AMPLITUDE, FG_NOISE_AMPLITUDE_RANGE } from "../OscilloscopeConstants.js";
 import OscilloscopeNamespace from "../OscilloscopeNamespace.js";
-import { FG_DEFAULT_NOISE_AMPLITUDE, FG_NOISE_AMPLITUDE_RANGE } from "../SimConstants.js";
 
 const oscilloscopeQueryParameters = QueryStringMachine.getAll({
   /**

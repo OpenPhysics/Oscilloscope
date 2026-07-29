@@ -1,6 +1,9 @@
-# Credits — TemplateSingleSim
+# Credits — Oscilloscope
 
-Reusable single-screen SceneryStack simulation template with Vite, TypeScript, Biome, PWA support, and i18n scaffolding.
+A single-screen SceneryStack simulation of a bench oscilloscope with a built-in function generator
+and optional live microphone input. Features dual channels, trigger modes (including holdoff),
+delayed sweep, X-Y and FFT views, measurement cursors, guided lab activities, and full interactive
+description accessibility.
 
 ## License
 

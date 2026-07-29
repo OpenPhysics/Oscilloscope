@@ -122,7 +122,7 @@ that constraint directly so the override does not come back.
 | File | Purpose |
 |---|---|
 | `src/OscilloscopeColors.ts` | All `ProfileColorProperty` instances (incl. CRT phosphor / graticule colors) |
-| `src/SimConstants.ts` | Named numeric constants (display geometry, generator & scope ranges/steps) |
+| `src/OscilloscopeConstants.ts` | Named numeric constants (display geometry, generator & scope ranges/steps) |
 | `src/OscilloscopeNamespace.ts` | Namespace for color property names |
 | `src/i18n/StringManager.ts` | Singleton localized string accessor |
 | `src/oscilloscope-screen/OscilloscopeScreen.ts` | Screen wrapper (threads show-measurements + noise preferences to view/model) |

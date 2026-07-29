@@ -29,7 +29,7 @@ import type { Node } from "scenerystack/scenery";
 import type { PanelOptions } from "scenerystack/sun";
 import { Panel } from "scenerystack/sun";
 import OscilloscopeColors from "../OscilloscopeColors.js";
-import { PANEL_CORNER_RADIUS } from "../SimConstants.js";
+import { PANEL_CORNER_RADIUS } from "../OscilloscopeConstants.js";
 
 export class SimPanel extends Panel {
   public constructor(content: Node, providedOptions?: PanelOptions) {

@@ -28,7 +28,7 @@ import {
   DISPLAY_WIDTH,
   DIVISION_SIZE,
   HORIZONTAL_DIVISIONS,
-} from "../../SimConstants.js";
+} from "../../OscilloscopeConstants.js";
 
 /** Stroke width of the dashed cursor line, in screen pixels. */
 const CURSOR_LINE_WIDTH = 1;

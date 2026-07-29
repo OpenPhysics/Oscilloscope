@@ -19,7 +19,7 @@ main.ts
             ├─ OscilloscopeDisplayNode        CRT face, traces, trigger marker, cursors
             │    └─ MeasurementCursorNode × 4 accessible draggable cursors
             ├─ SignalGeneratorPanel / VerticalControlPanel / HorizontalControlPanel
-            ├─ TriggerControlPanel / AcquisitionPanel
+            ├─ TriggerControlPanel / SoftAcquirePanel / DisplayControlPanel
             ├─ MeasurementReadoutNode / CursorReadoutNode
             ├─ OscilloscopeScreenSummaryContent   (PDOM overview, live details)
             └─ OscilloscopeKeyboardHelpContent

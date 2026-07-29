@@ -26,7 +26,7 @@ import {
   SCOPE_TRIGGER_LEVEL_RANGE,
   TRACE_SAMPLE_COUNT,
   VERTICAL_DIVISIONS,
-} from "../../SimConstants.js";
+} from "../../OscilloscopeConstants.js";
 import type { Channel } from "../model/Channel.js";
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
 import {

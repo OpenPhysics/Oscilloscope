@@ -15,7 +15,7 @@ import { RotaryKnob } from "../../common/controls/RotaryKnob.js";
 import { DisposalBag } from "../../common/DisposalBag.js";
 import { SimPanel } from "../../common/SimPanel.js";
 import { StringManager } from "../../i18n/StringManager.js";
-import { SCOPE_FOCUS_RANGE, SCOPE_INTENSITY_RANGE } from "../../SimConstants.js";
+import { SCOPE_FOCUS_RANGE, SCOPE_INTENSITY_RANGE } from "../../OscilloscopeConstants.js";
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
 import { derivedString } from "./controlHelpers.js";
 import { formatPercent } from "./formatUnits.js";

@@ -27,7 +27,7 @@ import {
   SCOPE_TRIGGER_LEVEL_RANGE,
   SCOPE_VOLTS_PER_DIV_STEPS,
   SCREEN_VIEW_MARGIN,
-} from "../../SimConstants.js";
+} from "../../OscilloscopeConstants.js";
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
 import { spectrumMaxFrequency } from "../model/Spectrum.js";
 import { CursorReadoutNode } from "./CursorReadoutNode.js";

@@ -24,7 +24,6 @@ import {
 } from "scenerystack/axon";
 import type { TModel } from "scenerystack/joist";
 import { TimeModel } from "../../common/TimeModel.js";
-import OscilloscopeNamespace from "../../OscilloscopeNamespace.js";
 import {
   AC_COUPLING_TIME_CONSTANT,
   AC_STEADY_STATE_SAMPLES,
@@ -48,7 +47,8 @@ import {
   TRACE_SAMPLE_COUNT,
   TRIGGER_SEARCH_STEPS,
   VERTICAL_DIVISIONS,
-} from "../../SimConstants.js";
+} from "../../OscilloscopeConstants.js";
+import OscilloscopeNamespace from "../../OscilloscopeNamespace.js";
 import { AudioInput } from "./AudioInput.js";
 import { Channel } from "./Channel.js";
 import type { ChannelInput, SignalJack } from "./ChannelInput.js";

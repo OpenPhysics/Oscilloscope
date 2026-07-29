@@ -13,7 +13,6 @@
  */
 
 import { BooleanProperty, NumberProperty, StringUnionProperty, type TReadOnlyProperty } from "scenerystack/axon";
-import OscilloscopeNamespace from "../../OscilloscopeNamespace.js";
 import {
   FG_AMPLITUDE_RANGE,
   FG_DEFAULT_AMPLITUDE,
@@ -27,7 +26,8 @@ import {
   FG_NOISE_AMPLITUDE_RANGE,
   FG_OFFSET_RANGE,
   FG_PHASE_RANGE,
-} from "../../SimConstants.js";
+} from "../../OscilloscopeConstants.js";
+import OscilloscopeNamespace from "../../OscilloscopeNamespace.js";
 import { WAVEFORMS, type Waveform, waveformMean, waveformSample } from "./Waveform.js";
 
 export class FunctionGenerator {

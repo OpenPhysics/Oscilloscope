@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { SCOPE_TIME_PER_DIV_STEPS, SCOPE_VOLTS_PER_DIV_STEPS } from "../src/OscilloscopeConstants.js";
 import {
   estimateDutyCycle,
   estimateFallTime,
@@ -16,7 +17,6 @@ import {
   meanOf,
   nearestStep,
 } from "../src/oscilloscope-screen/view/measurementUtils.js";
-import { SCOPE_TIME_PER_DIV_STEPS, SCOPE_VOLTS_PER_DIV_STEPS } from "../src/SimConstants.js";
 
 /** `cycles` full periods spread across `samples` points spanning the whole window. */
 function sineBuffer(cycles: number, samples: number): Float32Array {

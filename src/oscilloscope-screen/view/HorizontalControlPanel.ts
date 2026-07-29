@@ -13,7 +13,11 @@ import { RotarySwitch } from "../../common/controls/RotarySwitch.js";
 import { DisposalBag } from "../../common/DisposalBag.js";
 import { SimPanel } from "../../common/SimPanel.js";
 import { StringManager } from "../../i18n/StringManager.js";
-import { SCOPE_DELAY_RANGE, SCOPE_HORIZONTAL_POSITION_RANGE, SCOPE_TIME_PER_DIV_STEPS } from "../../SimConstants.js";
+import {
+  SCOPE_DELAY_RANGE,
+  SCOPE_HORIZONTAL_POSITION_RANGE,
+  SCOPE_TIME_PER_DIV_STEPS,
+} from "../../OscilloscopeConstants.js";
 import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
 import { DELAYED_SWEEP_MODES } from "../model/OscilloscopeModel.js";
 import { derivedString, numberItems, unionItems } from "./controlHelpers.js";

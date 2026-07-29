@@ -14,14 +14,14 @@
 
 import { BooleanProperty, NumberProperty } from "scenerystack/axon";
 import { describe, expect, it, vi } from "vitest";
-import { OscilloscopeModel } from "../src/oscilloscope-screen/model/OscilloscopeModel.js";
 import {
   FG_DEFAULT_FREQUENCY,
   HORIZONTAL_DIVISIONS,
   SCOPE_MAGNIFY_FACTOR,
   SCOPE_TIME_PER_DIV_STEPS,
   TRACE_SAMPLE_COUNT,
-} from "../src/SimConstants.js";
+} from "../src/OscilloscopeConstants.js";
+import { OscilloscopeModel } from "../src/oscilloscope-screen/model/OscilloscopeModel.js";
 
 /** A model whose generator injects noise, as the sim does by default. */
 function noisyModel(amplitude = 0.15): OscilloscopeModel {

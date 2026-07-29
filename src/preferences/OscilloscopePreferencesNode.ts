@@ -19,8 +19,8 @@ import type { Tandem } from "scenerystack/tandem";
 import { LIGHT_SURFACE_TEXT_FILL } from "../common/SimButtonOptions.js";
 import { StringManager } from "../i18n/StringManager.js";
 import OscilloscopeColors from "../OscilloscopeColors.js";
+import { FG_NOISE_AMPLITUDE_RANGE } from "../OscilloscopeConstants.js";
 import OscilloscopeNamespace from "../OscilloscopeNamespace.js";
-import { FG_NOISE_AMPLITUDE_RANGE } from "../SimConstants.js";
 import type { OscilloscopePreferencesModel } from "./OscilloscopePreferencesModel.js";
 
 export class OscilloscopePreferencesNode extends VBox {

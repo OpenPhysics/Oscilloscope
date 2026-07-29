@@ -14,20 +14,19 @@ import type { OscilloscopeModel } from "../model/OscilloscopeModel.js";
 
 function describeChannelInput(
   input: ChannelInput,
-  channel: 1 | 2,
   fgDetails: string,
   audioActive: string,
   audioInactive: string,
-  unconnectedPattern: (channel: number) => string,
+  unconnected: string,
   micActive: boolean,
 ): string {
   if (input === "none") {
-    return unconnectedPattern(channel);
+    return unconnected;
   }
   if (input === "microphone") {
     return micActive ? audioActive : audioInactive;
   }
-  return fgDetails.replace("{{channel}}", String(channel));
+  return fgDetails;
 }
 
 export class OscilloscopeScreenSummaryContent extends ScreenSummaryContent {
@@ -54,18 +53,23 @@ export class OscilloscopeScreenSummaryContent extends ScreenSummaryContent {
       },
     );
 
-    const functionGeneratorDetails = new PatternStringProperty(
+    // One PatternStringProperty per channel so {{channel}} is correct when both
+    // BNCs are patched to the generator — a shared string already filled for
+    // "whichever channel has FG" left the wrong number on the second channel.
+    const functionGeneratorDetailsCh1 = new PatternStringProperty(
       details.functionGeneratorStringProperty,
       {
-        channel: new DerivedProperty([model.ch1.inputProperty, model.ch2.inputProperty], (a, b) => {
-          if (a === "functionGeneratorA" || a === "functionGeneratorB") {
-            return 1;
-          }
-          if (b === "functionGeneratorA" || b === "functionGeneratorB") {
-            return 2;
-          }
-          return 1;
-        }),
+        channel: 1,
+        waveform: waveformNameProperty,
+        frequency: fg.frequencyProperty,
+        amplitude: fg.amplitudeProperty,
+      },
+      { decimalPlaces: { channel: 0, waveform: null, frequency: 0, amplitude: 2 } },
+    );
+    const functionGeneratorDetailsCh2 = new PatternStringProperty(
+      details.functionGeneratorStringProperty,
+      {
+        channel: 2,
         waveform: waveformNameProperty,
         frequency: fg.frequencyProperty,
         amplitude: fg.amplitudeProperty,
@@ -89,18 +93,19 @@ export class OscilloscopeScreenSummaryContent extends ScreenSummaryContent {
         model.ch1.inputProperty,
         model.ch2.inputProperty,
         model.audioInput.statusProperty,
-        functionGeneratorDetails,
+        functionGeneratorDetailsCh1,
+        functionGeneratorDetailsCh2,
         details.audioActiveStringProperty,
         details.audioInactiveStringProperty,
         unconnectedCh1,
         unconnectedCh2,
       ],
-      (ch1In, ch2In, status, fgDetails, audioActive, audioInactive, unc1, unc2) => {
+      (ch1In, ch2In, status, fg1, fg2, audioActive, audioInactive, unc1, unc2) => {
         const micActive = status === "active";
         const parts: string[] = [];
-        parts.push(describeChannelInput(ch1In, 1, fgDetails, audioActive, audioInactive, () => unc1, micActive));
+        parts.push(describeChannelInput(ch1In, fg1, audioActive, audioInactive, unc1, micActive));
         if (ch2In !== "none" || model.ch2.enabledProperty.value) {
-          parts.push(describeChannelInput(ch2In, 2, fgDetails, audioActive, audioInactive, () => unc2, micActive));
+          parts.push(describeChannelInput(ch2In, fg2, audioActive, audioInactive, unc2, micActive));
         }
         return parts.join(" ");
       },

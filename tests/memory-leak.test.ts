@@ -17,6 +17,7 @@ import { RotaryKnob } from "../src/common/controls/RotaryKnob.js";
 import { RotarySwitch } from "../src/common/controls/RotarySwitch.js";
 import { TimeModel } from "../src/common/TimeModel.js";
 import { StringManager } from "../src/i18n/StringManager.js";
+import { CURSOR_TIME_RANGE } from "../src/OscilloscopeConstants.js";
 import { OscilloscopeModel } from "../src/oscilloscope-screen/model/OscilloscopeModel.js";
 import { BncJackNode } from "../src/oscilloscope-screen/view/BncJackNode.js";
 import { CursorReadoutNode } from "../src/oscilloscope-screen/view/CursorReadoutNode.js";
@@ -30,7 +31,6 @@ import { SignalGeneratorPanel } from "../src/oscilloscope-screen/view/SignalGene
 import { SoftAcquirePanel } from "../src/oscilloscope-screen/view/SoftAcquirePanel.js";
 import { TriggerControlPanel } from "../src/oscilloscope-screen/view/TriggerControlPanel.js";
 import { VerticalControlPanel } from "../src/oscilloscope-screen/view/VerticalControlPanel.js";
-import { CURSOR_TIME_RANGE } from "../src/SimConstants.js";
 
 /**
  * Force garbage collection with multiple passes. When `earlyExitRef` is supplied

@@ -35,7 +35,7 @@ or a voice becomes a live trace.
 
 ## Quantities and units
 
-All model quantities are SI. Ranges below are enforced by `Range` objects in `src/SimConstants.ts`.
+All model quantities are SI. Ranges below are enforced by `Range` objects in `src/OscilloscopeConstants.ts`.
 
 | Quantity | Symbol | Units | Range | Default |
 |---|---|---|---|---|
@@ -94,6 +94,12 @@ exists — the level is outside the signal's range — the behavior depends on t
 sweeps anyway from `t = 0` (a free-running trace), **normal** holds the previously captured sweep,
 and **single** holds it too, then stops the sweep clock once one triggered capture lands.
 
+**Holdoff.** After an accepted trigger the comparator ignores crossings for a holdoff interval (0–
+100 ms on the front panel). The next sweep anchors on the first valid crossing at or after that
+dead time. On the built-in single-edge-per-cycle waveforms this only skips whole periods and lands
+on the same phase, so the frozen display is unchanged — just as on a bench scope with a simple
+repetitive signal.
+
 **Coupling.** Applied to the sampled buffer:
 
 ```
@@ -135,8 +141,10 @@ plots the single-sided magnitude normalized so the largest bin reaches full heig
 - **Sampling is not modeled.** There is no sample-rate limit, no aliasing, and no interpolation
   artifact — the generator is evaluated exactly at each column. A real digital scope aliases badly
   once the signal approaches its sample rate.
-- **Trigger holdoff is not modeled**, and the trigger search covers a single period, so it finds the
-  first crossing rather than tracking a specific one across sweeps.
+- **Trigger holdoff skips crossings for a dead time after each accepted trigger**, then takes the
+  first crossing at or after that delay (modulo one period). On a simple single-edge-per-cycle
+  waveform that only skips whole periods and lands on the same phase — the display looks unchanged —
+  so its educational effect shows up on multi-edge signals. The search still covers a single period.
 - **Injected noise is uniform and independent per sample** (white), not the pink or thermal noise of
   a real instrument. It is added for signal-to-noise discussion and is on by default.
 - **The microphone signal is treated as volts** in the range [−1, 1]; there is no calibration to a
