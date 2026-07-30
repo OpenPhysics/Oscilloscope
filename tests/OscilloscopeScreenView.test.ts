@@ -26,6 +26,9 @@ function createView(model: OscilloscopeModel): OscilloscopeScreenView {
 /** The measured value the readout is showing, read back off the view. */
 function measured(view: OscilloscopeScreenView, key: string): number {
   const value = (view as unknown as Record<string, { value: number }>)[key];
+  if (value === undefined) {
+    throw new Error(`test fixture: missing measured readout "${key}"`);
+  }
   return value.value;
 }
 

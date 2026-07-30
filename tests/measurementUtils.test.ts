@@ -86,7 +86,11 @@ describe("estimateFrequency", () => {
     const clean = estimateFrequency(sineBuffer(5, 1000), 1);
     const offset = sineBuffer(5, 1000);
     for (let i = 0; i < offset.length; i++) {
-      offset[i] += 10; // large DC offset
+      const sample = offset[i];
+      if (sample === undefined) {
+        throw new Error("test fixture: expected sine buffer sample");
+      }
+      offset[i] = sample + 10; // large DC offset
     }
     expect(estimateFrequency(offset, 1)).toBeCloseTo(clean, 6);
   });

@@ -31,7 +31,7 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "fix": "biome check --write .",
-    "check": "tsc --noEmit && tsc -p tsconfig.scripts.json --noEmit",
+    "check": "tsc --noEmit && tsc -p tsconfig.scripts.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "release": "npm run check && npm run lint && npm run build && npm version patch && git push && git push --tags",
     "watch": "tsc --watch",
     "test": "vitest run",
