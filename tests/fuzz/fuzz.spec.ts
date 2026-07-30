@@ -1,5 +1,5 @@
 /**
- * Optional Playwright fuzz smoke for the single-sim template.
+ * Optional Playwright fuzz smoke for the SceneryStack template.
  *
  * Usage:
  *   npm run test:fuzz
