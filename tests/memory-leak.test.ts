@@ -1,5 +1,5 @@
 /**
- * Fleet-standard memory-leak regression suite (TemplateSingleSim / QubitSketch pattern).
+ * Fleet-standard memory-leak regression suite (SceneryStackTemplate / QubitSketch pattern).
  *
  * Creates a disposable model object inside a function boundary, disposes it, forces
  * garbage collection via global.gc (--expose-gc in vitest.config.ts), then asserts via

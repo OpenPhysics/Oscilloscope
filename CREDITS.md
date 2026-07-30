@@ -1,4 +1,4 @@
-# Credits — TemplateSingleSim
+# Credits — Oscilloscope
 
 Reusable single-screen SceneryStack simulation template with Vite, TypeScript, Biome, PWA support, and i18n scaffolding.
 
