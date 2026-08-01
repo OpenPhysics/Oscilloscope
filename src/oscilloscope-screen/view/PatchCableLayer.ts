@@ -224,6 +224,8 @@ export class PatchCableLayer extends Node {
 
   private attachSourceDrag(jackNode: BncJackNode, jack: SignalJack): void {
     let dragging = false;
+    // Drag-to-connect is pointer-only (source jack → drop on BNC). Keyboard
+    // routing uses the channel-input selectors in the control panels instead.
     const dragListener = new DragListener({
       start: () => {
         dragging = true;

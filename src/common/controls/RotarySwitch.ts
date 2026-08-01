@@ -194,6 +194,8 @@ export class RotarySwitch<T> extends AccessibleSliderNode {
     property.link(propertyListener);
 
     // ── Pointer turn: angular drag advances the dial detent by detent ─────────
+    // Keyboard stepping is owned by AccessibleSlider (arrows / Home / End / Page);
+    // RichDragListener would double-bind those keys, so this stays pointer-only.
     // Match the visual tick spacing when detents are dense; cap at ~30° so
     // 2–3 position switches (source, coupling, …) do not need a half-turn.
     const detentRadians = maxIndex === 0 ? KNOB_SWEEP_RADIANS : KNOB_SWEEP_RADIANS / maxIndex;

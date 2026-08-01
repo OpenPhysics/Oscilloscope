@@ -104,6 +104,9 @@ export class MeasurementCursorNode extends AccessibleSliderNode {
     this.addChild(hit);
     this.addChild(line);
 
+    // Pointer-only: this node mixes in AccessibleSlider, which already owns the arrow / Home / End
+    // / Page keys. A RichDragListener would add a second KeyboardDragListener binding the same
+    // arrows on the same node (the reason RotarySwitch stays on a plain DragListener too).
     const dragListener = new DragListener({
       drag: (event) => {
         valueProperty.value = range.constrainValue(options.pointerToValue(event.pointer.point));
