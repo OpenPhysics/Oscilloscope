@@ -11,6 +11,7 @@
  */
 
 import { Shape } from "scenerystack/kite";
+import { type EmptySelfOptions, optionize } from "scenerystack/phet-core";
 import { DragListener, Node, type NodeOptions, Path, Rectangle } from "scenerystack/scenery";
 import { StringManager } from "../../i18n/StringManager.js";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
@@ -114,7 +115,8 @@ export class OscilloscopeDisplayNode extends Node {
   private readonly ownedChildren: Node[] = [];
 
   public constructor(model: OscilloscopeModel, providedOptions?: NodeOptions) {
-    super();
+    const options = optionize<NodeOptions, EmptySelfOptions, NodeOptions>()({}, providedOptions);
+    super(options);
     this.model = model;
 
     // ── CRT face ──────────────────────────────────────────────────────────────

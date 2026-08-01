@@ -25,21 +25,26 @@
  *   const panel = new SimPanel(content, { fill: "transparent" });
  */
 
+import { type EmptySelfOptions, optionize } from "scenerystack/phet-core";
 import type { Node } from "scenerystack/scenery";
-import type { PanelOptions } from "scenerystack/sun";
-import { Panel } from "scenerystack/sun";
+import { Panel, type PanelOptions } from "scenerystack/sun";
 import OscilloscopeColors from "../OscilloscopeColors.js";
 import { PANEL_CORNER_RADIUS } from "../OscilloscopeConstants.js";
 
+export type SimPanelOptions = PanelOptions;
+
 export class SimPanel extends Panel {
-  public constructor(content: Node, providedOptions?: PanelOptions) {
-    super(content, {
-      fill: OscilloscopeColors.panelBackgroundColorProperty,
-      stroke: OscilloscopeColors.panelBorderColorProperty,
-      cornerRadius: PANEL_CORNER_RADIUS,
-      xMargin: 12,
-      yMargin: 10,
-      ...providedOptions,
-    });
+  public constructor(content: Node, providedOptions?: SimPanelOptions) {
+    const options = optionize<SimPanelOptions, EmptySelfOptions, PanelOptions>()(
+      {
+        fill: OscilloscopeColors.panelBackgroundColorProperty,
+        stroke: OscilloscopeColors.panelBorderColorProperty,
+        cornerRadius: PANEL_CORNER_RADIUS,
+        xMargin: 12,
+        yMargin: 10,
+      },
+      providedOptions,
+    );
+    super(content, options);
   }
 }

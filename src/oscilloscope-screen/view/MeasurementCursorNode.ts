@@ -17,6 +17,7 @@
 import { Property, type TProperty, type TReadOnlyProperty } from "scenerystack/axon";
 import type { Range, Vector2 } from "scenerystack/dot";
 import { Shape } from "scenerystack/kite";
+import { type EmptySelfOptions, optionize } from "scenerystack/phet-core";
 import { DragListener, Node, type NodeOptions, Path, Rectangle } from "scenerystack/scenery";
 import { AccessibleSlider, type AccessibleSliderOptions } from "scenerystack/sun";
 import OscilloscopeColors from "../../OscilloscopeColors.js";
@@ -63,6 +64,11 @@ export class MeasurementCursorNode extends AccessibleSliderNode {
     orientation: CursorOrientation,
     providedOptions: MeasurementCursorNodeOptions,
   ) {
+    const options = optionize<MeasurementCursorNodeOptions, MeasurementCursorNodeOptions, EmptySelfOptions>()(
+      {},
+      providedOptions,
+    );
+
     const isTime = orientation === "time";
     const enabledRangeProperty = new Property(range);
 
@@ -72,7 +78,7 @@ export class MeasurementCursorNode extends AccessibleSliderNode {
       keyboardStep: CURSOR_KEYBOARD_STEP,
       shiftKeyboardStep: CURSOR_SHIFT_KEYBOARD_STEP,
       pageKeyboardStep: CURSOR_PAGE_KEYBOARD_STEP,
-      accessibleName: providedOptions.accessibleName,
+      accessibleName: options.accessibleName,
       cursor: isTime ? "ew-resize" : "ns-resize",
     };
     super(superOptions);
@@ -100,7 +106,7 @@ export class MeasurementCursorNode extends AccessibleSliderNode {
 
     const dragListener = new DragListener({
       drag: (event) => {
-        valueProperty.value = range.constrainValue(providedOptions.pointerToValue(event.pointer.point));
+        valueProperty.value = range.constrainValue(options.pointerToValue(event.pointer.point));
       },
     });
     this.addInputListener(dragListener);

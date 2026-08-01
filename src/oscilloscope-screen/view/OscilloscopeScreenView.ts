@@ -13,6 +13,7 @@
 import type { TProperty, TReadOnlyProperty } from "scenerystack/axon";
 import { DerivedProperty, NumberProperty } from "scenerystack/axon";
 import { Bounds2 } from "scenerystack/dot";
+import { optionize } from "scenerystack/phet-core";
 import { Node, Rectangle, VBox } from "scenerystack/scenery";
 import { ResetAllButton } from "scenerystack/scenery-phet";
 import type { ScreenViewOptions } from "scenerystack/sim";
@@ -54,11 +55,11 @@ import { VerticalControlPanel } from "./VerticalControlPanel.js";
 
 const LAYOUT_BOUNDS = new Bounds2(0, 0, 1280, 800);
 
-type SelfOptions = {
+type OscilloscopeScreenViewSelfOptions = {
   showMeasurementsProperty: TProperty<boolean>;
 };
 
-export type OscilloscopeScreenViewOptions = SelfOptions & ScreenViewOptions;
+export type OscilloscopeScreenViewOptions = OscilloscopeScreenViewSelfOptions & ScreenViewOptions;
 
 export class OscilloscopeScreenView extends ScreenView {
   private readonly model: OscilloscopeModel;
@@ -105,13 +106,16 @@ export class OscilloscopeScreenView extends ScreenView {
   private labDialog: LabActivitiesDialog | null = null;
 
   public constructor(model: OscilloscopeModel, providedOptions: OscilloscopeScreenViewOptions) {
-    const { showMeasurementsProperty, ...screenViewOptions } = providedOptions;
+    const options = optionize<OscilloscopeScreenViewOptions, OscilloscopeScreenViewSelfOptions, ScreenViewOptions>()(
+      {
+        layoutBounds: LAYOUT_BOUNDS,
+        screenSummaryContent: new OscilloscopeScreenSummaryContent(model),
+      },
+      providedOptions,
+    );
+    const { showMeasurementsProperty } = options;
 
-    super({
-      layoutBounds: LAYOUT_BOUNDS,
-      screenSummaryContent: new OscilloscopeScreenSummaryContent(model),
-      ...screenViewOptions,
-    });
+    super(options);
 
     this.model = model;
     this.measuredProperties = [
