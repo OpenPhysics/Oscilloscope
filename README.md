@@ -1,5 +1,7 @@
 # Oscilloscope
 
+[![CI](https://github.com/OpenPhysics/Oscilloscope/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenPhysics/Oscilloscope/actions/workflows/ci.yml)
+
 A single-screen [SceneryStack](https://scenerystack.org/) simulation of a bench oscilloscope.
 Feed it a synthetic signal from the built-in **function generator** or **live microphone audio**,
 and watch the waveform sweep across a phosphor-green CRT graticule. Built with Vite 8,
