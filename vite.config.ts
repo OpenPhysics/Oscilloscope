@@ -35,7 +35,9 @@ const securityHeaders: Record<string, string> = {
     "frame-ancestors 'none'",
   ].join("; "),
   "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  // microphone=(self): the MIC jack uses getUserMedia. A locked `microphone=()`
+  // policy logs a console error on every request and fails fuzz.
+  "Permissions-Policy": "camera=(), microphone=(self), geolocation=()",
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
 };

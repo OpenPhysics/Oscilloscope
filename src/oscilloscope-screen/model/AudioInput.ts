@@ -69,6 +69,26 @@ export class AudioInput {
   }
 
   /**
+   * Whether this document's Permissions-Policy allows `getUserMedia({ audio })`.
+   * Calling getUserMedia when the policy forbids microphone logs a console error
+   * (`Permissions policy violation`) even if the promise is caught.
+   */
+  private static isMicrophoneAllowedByPolicy(): boolean {
+    if (typeof document === "undefined") {
+      return false;
+    }
+    const policyHolder = document as Document & {
+      permissionsPolicy?: { allowsFeature: (feature: string) => boolean };
+      featurePolicy?: { allowsFeature: (feature: string) => boolean };
+    };
+    const policy = policyHolder.permissionsPolicy ?? policyHolder.featurePolicy;
+    if (policy && typeof policy.allowsFeature === "function") {
+      return policy.allowsFeature("microphone");
+    }
+    return true;
+  }
+
+  /**
    * Requests microphone access and begins analysing the stream. Safe to call
    * repeatedly; a no-op while already requesting or active.
    */
@@ -79,7 +99,7 @@ export class AudioInput {
 
     const AudioContextCtor = AudioInput.getAudioContextConstructor();
     const mediaDevices = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
-    if (!(AudioContextCtor && mediaDevices?.getUserMedia)) {
+    if (!(AudioContextCtor && mediaDevices?.getUserMedia && AudioInput.isMicrophoneAllowedByPolicy())) {
       this.statusProperty.value = "unsupported";
       return;
     }

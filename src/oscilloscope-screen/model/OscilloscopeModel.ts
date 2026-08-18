@@ -685,6 +685,10 @@ export class OscilloscopeModel implements TModel {
    * Pulls the timebase back inside {@link microphoneMaxTimePerDivision} whenever the
    * microphone is patched, snapping down to the next 1-2-5 detent so the knob keeps
    * reading a real switch position.
+   *
+   * The write is deferred: this runs from a multilink on `timePerDivisionProperty`
+   * (and the rotary switch writes that Property from its index listener), and axon
+   * asserts if a Property is set while it is already notifying.
    */
   private enforceMicrophoneTimebase(): void {
     if (this.clampingTimebase || !this.microphoneInUse) {
@@ -695,8 +699,19 @@ export class OscilloscopeModel implements TModel {
       return;
     }
     this.clampingTimebase = true;
-    this.timePerDivisionProperty.value = largestStepAtMost([...SCOPE_TIME_PER_DIV_STEPS], limit);
-    this.clampingTimebase = false;
+    queueMicrotask(() => {
+      try {
+        if (!this.microphoneInUse) {
+          return;
+        }
+        const deferredLimit = this.microphoneMaxTimePerDivision;
+        if (this.timePerDivisionProperty.value > deferredLimit) {
+          this.timePerDivisionProperty.value = largestStepAtMost([...SCOPE_TIME_PER_DIV_STEPS], deferredLimit);
+        }
+      } finally {
+        this.clampingTimebase = false;
+      }
+    });
   }
 
   private phaseForInput(input: ChannelInput): number {

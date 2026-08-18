@@ -562,18 +562,20 @@ describe("OscilloscopeModel", () => {
   });
 
   describe("microphone acquisition memory", () => {
-    it("clamps the timebase to the window the analyser can fill", () => {
+    it("clamps the timebase to the window the analyser can fill", async () => {
       const model = new OscilloscopeModel();
       const limit = model.microphoneMaxTimePerDivision;
       expect(limit).toBeGreaterThan(0);
 
       model.timePerDivisionProperty.value = 0.5;
       model.connectJack(1, "microphone");
+      await Promise.resolve();
       expect(model.timePerDivisionProperty.value).toBeLessThanOrEqual(limit);
       expect(SCOPE_TIME_PER_DIV_STEPS).toContain(model.timePerDivisionProperty.value);
 
       // Turning the knob past the limit while patched is pulled straight back.
       model.timePerDivisionProperty.value = 0.2;
+      await Promise.resolve();
       expect(model.timePerDivisionProperty.value).toBeLessThanOrEqual(limit);
       model.dispose();
     });
